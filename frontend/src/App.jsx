@@ -120,23 +120,80 @@ export function App() {
 
   const handleUpdateArticle = async (articleId, updateFields) => {
     try {
-      await axios.put(`${API_BASE}/articles/${articleId}/review`, updateFields, {
+      const res = await axios.put(`${API_BASE}/articles/${articleId}/review`, updateFields, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...updateFields }) : a));
     } catch (err) {
-      console.log('Review update fallback');
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...updateFields } : a));
     }
-    setArticles(articles.map(a => a.id === articleId ? { ...a, ...updateFields } : a));
   };
 
-  const handlePayPresentation = async (articleId) => {
+  const handlePublishArticle = async (articleId, is_published) => {
     try {
-      const res = await axios.post(`${API_BASE}/articles/${articleId}/pay-presentation`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await axios.put(`${API_BASE}/articles/${articleId}/publish`, { is_published }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setArticles(articles.map(a => a.id === articleId ? { ...a, is_published, published: is_published } : a));
+    } catch (err) {
+      setArticles(articles.map(a => a.id === articleId ? { ...a, is_published, published: is_published } : a));
+    }
+  };
+
+  const handleUpdateConference = async (confId, updatedData) => {
+    try {
+      const res = await axios.put(`${API_BASE}/admin/conferences/${confId}`, updatedData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setConferences(conferences.map(c => c.id === confId ? res.data.conference : c));
+    } catch (err) {
+      setConferences(conferences.map(c => c.id === confId ? { ...c, ...updatedData } : c));
+    }
+  };
+
+  const handleCreateInvestor = async (investorData) => {
+    try {
+      const res = await axios.post(`${API_BASE}/admin/create-investor`, investorData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      return res.data;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error creating investor account');
+    }
+  };
+
+  const handleReviseArticle = async (articleId, revisionData) => {
+    try {
+      const res = await axios.put(`${API_BASE}/articles/${articleId}/revise`, revisionData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       setArticles(articles.map(a => a.id === articleId ? res.data.article : a));
     } catch (err) {
-      alert('Error recording presentation payment');
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...revisionData, status: 'Revised' } : a));
+    }
+  };
+
+  const handlePayPublicationFee = async (articleId, paymentData) => {
+    const payload = typeof paymentData === 'string' ? { receipt_url: paymentData } : paymentData;
+    try {
+      const res = await axios.post(`${API_BASE}/articles/${articleId}/pay-publication`, payload, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...payload, publication_fee_paid: true, status: 'Pub Fee Paid' }) : a));
+    } catch (err) {
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...payload, publication_fee_paid: true, status: 'Pub Fee Paid' } : a));
+    }
+  };
+
+  const handleApplyConference = async (articleId, paymentData) => {
+    const payload = typeof paymentData === 'string' ? { receipt_url: paymentData } : paymentData;
+    try {
+      const res = await axios.post(`${API_BASE}/articles/${articleId}/apply-conference`, payload, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...payload, presentation_fee_paid: true, status: 'Presentation Scheduled' }) : a));
+    } catch (err) {
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...payload, presentation_fee_paid: true, status: 'Presentation Scheduled' } : a));
     }
   };
 
@@ -172,8 +229,8 @@ export function App() {
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
             <div>
-              <span className="font-black text-xl tracking-tight text-white block leading-none">UNIV-CONF PORTAL</span>
-              <span className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider">Academic & Enterprise Research Portal</span>
+              <span className="font-black text-xl tracking-tight text-white block leading-none">UniVenture Hub</span>
+              <span className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider">Global Research & Venture Capital Portal</span>
             </div>
           </div>
 
@@ -256,7 +313,7 @@ export function App() {
             ) : (
               <button
                 onClick={() => setShowAuthModal(true)}
-                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-blue-600/30"
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-blue-600/30"
               >
                 <LogIn className="w-4 h-4" /> Register / Login
               </button>
@@ -272,7 +329,14 @@ export function App() {
             gallery={gallery}
             articles={articles}
             investorReviews={investorReviews}
-            onNavigateToLogin={() => setShowAuthModal(true)}
+            conferences={conferences}
+            onNavigateToLogin={(targetRole) => {
+              if (targetRole) {
+                setAuthData(prev => ({ ...prev, role: targetRole }));
+                setAuthMode('register');
+              }
+              setShowAuthModal(true);
+            }}
           />
         )}
 
@@ -281,14 +345,20 @@ export function App() {
             user={user || { id: 2, full_name: 'Ali Ahmed (Demo)', role: 'student' }}
             articles={articles}
             onArticleSubmit={handleArticleSubmit}
-            onPayPresentation={handlePayPresentation}
+            onReviseArticle={handleReviseArticle}
+            onPayPublicationFee={handlePayPublicationFee}
+            onApplyConference={handleApplyConference}
           />
         )}
 
         {activeTab === 'admin' && (
           <AdminDashboard
             articles={articles}
+            conferences={conferences}
             onUpdateArticle={handleUpdateArticle}
+            onPublishArticle={handlePublishArticle}
+            onUpdateConference={handleUpdateConference}
+            onCreateInvestor={handleCreateInvestor}
           />
         )}
 

@@ -279,39 +279,100 @@ export const PublicGallery = ({ gallery = [], articles = [], investorReviews = [
       </section>
 
       {/* SECTION 3: LIVE CONFERENCE SHOWCASE WITH 1-4 PRESENTING STUDENTS & ATTENDING INVESTORS */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/70 rounded-3xl p-8 sm:p-12 border border-slate-800 relative overflow-hidden space-y-8">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/70 rounded-3xl p-8 sm:p-12 border border-slate-800 relative overflow-hidden space-y-8 shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-bold text-purple-300 bg-purple-500/10 border border-purple-500/20">
-            <Clock className="w-3.5 h-3.5" /> Official Conference & Pitch Event
+        {/* Summit Banner Image & Main Info Header */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold text-purple-300 bg-purple-500/10 border border-purple-500/30">
+                <Clock className="w-3.5 h-3.5 text-purple-400" /> Official Conference & Live Pitch Summit
+              </span>
+
+              {conf.status === 'Live Now' ? (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black text-rose-300 bg-rose-500/20 border border-rose-500/40 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span> 🔴 Live Stream Broadcasting
+                </span>
+              ) : conf.status === 'Completed' ? (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold text-slate-300 bg-slate-800 border border-slate-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" /> Completed Summit
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold text-blue-300 bg-blue-500/10 border border-blue-500/30">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" /> Upcoming Innovation Summit
+                </span>
+              )}
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+              {conf.title}
+            </h2>
+
+            <p className="text-sm text-slate-300 leading-relaxed font-normal">
+              {conf.description}
+            </p>
+
+            {/* Schedule Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
+              <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400 uppercase font-semibold tracking-wider">Event Date</div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" /> {conf.event_date || 'Sept 15, 2026'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400 uppercase font-semibold tracking-wider">Time Duration</div>
+                <div className="text-xs font-bold text-purple-300 flex items-center gap-1.5 mt-1">
+                  <Clock className="w-3.5 h-3.5 text-purple-400" /> {conf.event_time || '10:00 AM - 04:00 PM'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800">
+                <div className="text-[11px] text-slate-400 uppercase font-semibold tracking-wider">Venue / Hall</div>
+                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 mt-1 line-clamp-1">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> {conf.venue}
+                </div>
+              </div>
+            </div>
           </div>
-          <h2 className="text-3xl font-black text-white tracking-tight">
-            {conf.title}
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            {conf.description}
-          </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <div className="text-xs text-slate-400">Event Date</div>
-              <div className="text-sm font-bold text-white flex items-center gap-1.5 mt-1">
-                <Calendar className="w-4 h-4 text-blue-400" /> {conf.event_date || 'Sept 15, 2026'}
+          {/* Banner Photo & Live Stream Card */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="relative rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl group">
+              <img
+                src={conf.cover_image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80'}
+                alt={conf.title}
+                className="w-full h-56 object-cover transform group-hover:scale-105 transition duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center text-xs">
+                <span className="px-3 py-1 bg-slate-900/90 text-white rounded-lg border border-slate-700 font-mono font-bold">
+                  Summit Main Stage
+                </span>
+                {conf.stream_link && (
+                  <a
+                    href={conf.stream_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center gap-1 shadow-lg"
+                  >
+                    <Globe className="w-3 h-3" /> Join Virtual Stream
+                  </a>
+                )}
               </div>
             </div>
 
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <div className="text-xs text-slate-400">Event Time</div>
-              <div className="text-sm font-bold text-purple-300 flex items-center gap-1.5 mt-1">
-                <Clock className="w-4 h-4 text-purple-400" /> {conf.event_time || '10:00 AM - 04:00 PM'}
+            {/* Ticket Options Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-semibold">🎟️ Physical Onsite Pass</span>
+                <span className="text-base font-black text-emerald-400">PKR / USD {conf.onsite_ticket_price || '50.00'}</span>
               </div>
-            </div>
-
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <div className="text-xs text-slate-400">Venue Location</div>
-              <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5 mt-1">
-                <MapPin className="w-4 h-4 text-emerald-400" /> {conf.venue}
+              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-semibold">🎟️ Online HD Stream Pass</span>
+                <span className="text-base font-black text-blue-400">PKR / USD {conf.online_ticket_price || '20.00'}</span>
               </div>
             </div>
           </div>
@@ -320,20 +381,20 @@ export const PublicGallery = ({ gallery = [], articles = [], investorReviews = [
         {/* 1 TO 4 PRESENTING STUDENTS LIST */}
         <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800 space-y-3 relative z-10">
           <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider">
-            <User className="w-4 h-4 text-blue-400" /> Scheduled Presenting Students & Research Pitch Topics (1 - 4 Presenters):
+            <User className="w-4 h-4 text-blue-400" /> Scheduled Presenting Students & Research Pitch Topics (1 - 4 Teams Lineup):
           </div>
-          <p className="text-sm font-semibold text-white leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-            {conf.presenting_students || 'Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography), Ali Ahmed (Nanomedicine), Ali Ahmed (Agri Drones)'}
+          <p className="text-sm font-semibold text-white leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800 font-sans">
+            {conf.presenting_students || 'Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography)'}
           </p>
         </div>
 
         {/* ATTENDING INVESTORS SHOWCASE */}
         <div className="bg-slate-950/90 p-6 rounded-2xl border border-slate-800 space-y-3 relative z-10">
           <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
-            <UserCheck className="w-4 h-4 text-amber-400" /> Registered Attending Investors & VC Angels:
+            <UserCheck className="w-4 h-4 text-amber-400" /> Attending Venture Capitalists & Business Investors Panel:
           </div>
-          <p className="text-sm font-semibold text-slate-200 leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-            {conf.attending_investors || 'John Malik (Apex Tech Capital), Dr. Sarah Vance (BioHealth VC), Hamza Qureshi (FinTech Angels)'}
+          <p className="text-sm font-semibold text-slate-200 leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800 font-sans">
+            {conf.attending_investors || 'John Malik (Apex Tech Capital), Dr. Sarah Vance (BioHealth VC)'}
           </p>
         </div>
 
@@ -342,7 +403,7 @@ export const PublicGallery = ({ gallery = [], articles = [], investorReviews = [
             onClick={() => onNavigateToLogin('attendee')}
             className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-2xl text-sm transition shadow-xl shadow-emerald-600/30 flex items-center gap-2.5"
           >
-            <Ticket className="w-5 h-5" /> Book Ticket & Get Assigned Seat Number <ArrowRight className="w-4 h-4" />
+            <Ticket className="w-5 h-5" /> Book Conference Pass & Reserve Seat <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>
@@ -410,31 +471,47 @@ export const PublicGallery = ({ gallery = [], articles = [], investorReviews = [
               <p className="text-xs text-slate-400">Author: <strong className="text-slate-200">{activeModalPaper.student_name}</strong></p>
             </div>
 
-            <div className="space-y-2 bg-slate-950/80 p-5 rounded-2xl border border-slate-800">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Abstract & Executive Summary</h4>
-              <p className="text-sm text-slate-300 leading-relaxed">{activeModalPaper.abstract}</p>
+            <div className="space-y-4">
+              <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-1">
+                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">Abstract & Executive Summary</h4>
+                <p className="text-xs text-slate-200 leading-relaxed font-sans">{activeModalPaper.abstract}</p>
+              </div>
+
+              <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-2">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Full Academic Article Content:</h4>
+                <div className="max-h-64 overflow-y-auto text-xs text-slate-300 font-mono whitespace-pre-wrap bg-slate-900/90 p-4 rounded-xl border border-slate-800 leading-relaxed">
+                  {activeModalPaper.full_text || activeModalPaper.abstract}
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
                 <span className="text-xs text-slate-400 block">Plagiarism Check Score</span>
-                <span className="text-lg font-bold text-emerald-400">{activeModalPaper.plagiarism_score || 4}% (Verified Clean)</span>
+                <span className="text-base font-bold text-emerald-400">{activeModalPaper.plagiarism_score || 4}% (Verified Clean)</span>
               </div>
               <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                <span className="text-xs text-slate-400 block">Academic Status</span>
-                <span className="text-lg font-bold text-blue-400">{activeModalPaper.status || 'Approved'}</span>
+                <span className="text-xs text-slate-400 block">Academic Tier Awarded</span>
+                <span className="text-base font-bold text-blue-400">{activeModalPaper.tier || 'Gold Tier'}</span>
               </div>
             </div>
 
-            <div className="pt-4 flex justify-end gap-3">
+            <div className="pt-2 flex justify-between items-center">
+              <button
+                onClick={() => setActiveModalPaper(null)}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition"
+              >
+                Close Viewer
+              </button>
+
               <button
                 onClick={() => {
                   setActiveModalPaper(null);
                   onNavigateToLogin('student');
                 }}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition"
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-blue-600/30"
               >
-                Submit Similar Paper
+                Submit Similar Research Paper
               </button>
             </div>
           </div>

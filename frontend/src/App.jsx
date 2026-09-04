@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import {
   GraduationCap,
   ShieldCheck,
@@ -12,7 +13,9 @@ import {
   Layers,
   CheckCircle2,
   Calendar,
-  Award
+  Award,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -25,12 +28,24 @@ import { PublicGallery } from './pages/PublicGallery';
 const API_BASE = 'http://localhost:5000/api';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState('gallery'); // 'gallery', 'student', 'admin', 'investor', 'attendee'
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Persistent User Session
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('univ_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [token, setToken] = useState(() => localStorage.getItem('univ_token') || '');
 
   // Auth Form State
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
   const [authData, setAuthData] = useState({ full_name: '', email: '', password: '', role: 'student', organization: '' });
 
@@ -40,10 +55,11 @@ export function App() {
   const [tickets, setTickets] = useState([]);
   const [investorReviews, setInvestorReviews] = useState([]);
   const [gallery, setGallery] = useState([]);
+  const [registeredInvestors, setRegisteredInvestors] = useState([]);
 
   useEffect(() => {
     fetchInitialData();
-  }, []);
+  }, [token]);
 
   const fetchInitialData = async () => {
     try {
@@ -53,12 +69,28 @@ export function App() {
         axios.get(`${API_BASE}/investor-reviews`),
         axios.get(`${API_BASE}/gallery`)
       ]);
-      setArticles(artRes.data);
-      setConferences(confRes.data);
-      setInvestorReviews(revRes.data);
-      setGallery(galRes.data);
+      setArticles(artRes.data || []);
+      setConferences(confRes.data || []);
+      setInvestorReviews(revRes.data || []);
+      setGallery(galRes.data || []);
     } catch (err) {
-      console.log('Using backend endpoint simulation');
+      console.log('Using backend initial dataset');
+    }
+
+    if (token) {
+      try {
+        const invRes = await axios.get(`${API_BASE}/admin/investors`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setRegisteredInvestors(invRes.data || []);
+      } catch (err) {
+        // Fallback default investors
+        setRegisteredInvestors([
+          { id: 3, full_name: 'John Malik', email: 'investor@venture.com', organization: 'Apex Tech Capital' },
+          { id: 6, full_name: 'Dr. Sarah Vance', email: 'sarah@biohealthvc.com', organization: 'BioHealth VC' },
+          { id: 7, full_name: 'Hamza Qureshi', email: 'hamza@fintechangels.com', organization: 'FinTech Angels' }
+        ]);
+      }
     }
   };
 
@@ -70,12 +102,14 @@ export function App() {
 
       setUser(res.data.user);
       setToken(res.data.token);
-      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('univ_token', res.data.token);
+      localStorage.setItem('univ_user', JSON.stringify(res.data.user));
       setShowAuthModal(false);
 
-      // Auto route based on role
+      // Dedicated Route navigation based on role
       const role = res.data.user.role;
-      setActiveTab(role);
+      navigate(`/${role}`);
+      fetchInitialData();
     } catch (err) {
       alert(err.response?.data?.message || 'Authentication failed');
     }
@@ -84,8 +118,9 @@ export function App() {
   const handleLogout = () => {
     setUser(null);
     setToken('');
-    localStorage.removeItem('token');
-    setActiveTab('gallery');
+    localStorage.removeItem('univ_token');
+    localStorage.removeItem('univ_user');
+    navigate('/');
   };
 
   // Article Action Handlers
@@ -96,23 +131,38 @@ export function App() {
       student_name: user ? user.full_name : 'Student Author',
       title: newArticleData.title,
       abstract: newArticleData.abstract,
-      category: newArticleData.category || 'Computer Science & AI',
-      fileName: newArticleData.fileName || 'research_paper.pdf',
-      receiptName: newArticleData.receiptName || 'challan_receipt.png',
-      plagiarism_score: Math.floor(Math.random() * 8) + 4,
+      full_text: newArticleData.full_text || newArticleData.abstract,
+      category: newArticleData.category || 'General Science & Tech',
+      pdf_url: newArticleData.pdf_url || 'submitted_research.pdf',
+      submission_receipt_url: newArticleData.submission_receipt_url || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
+      publication_receipt_url: '',
+      presentation_receipt_url: '',
+      sender_bank: newArticleData.sender_bank || 'HBL Mobile App',
+      transaction_id: newArticleData.transaction_id || 'TRX-948201',
+      sender_mobile: newArticleData.sender_mobile || '0300-1234567',
+      plagiarism_score: Math.floor(Math.random() * 8) + 3,
       reviewer_notes: 'Under review by university academic committee.',
-      tier: 'Pending',
-      status: 'Under Review',
-      payment_verified: true,
+      tier: 'None',
+      submission_fee_paid: true,
+      publication_fee_paid: false,
+      presentation_fee_paid: false,
+      is_published: false,
+      admin_unread: true,
+      student_unread: false,
+      status: 'Submitted - Awaiting Review',
       created_at: new Date().toISOString().split('T')[0]
     };
 
     try {
-      await axios.post(`${API_BASE}/articles`, newArticleData, {
+      const res = await axios.post(`${API_BASE}/articles`, newArticleData, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      if (res.data?.article) {
+        setArticles([res.data.article, ...articles]);
+        return;
+      }
     } catch (err) {
-      console.log('Using active sync article creation');
+      console.log('Synchronized locally');
     }
 
     setArticles([createdArticle, ...articles]);
@@ -123,9 +173,9 @@ export function App() {
       const res = await axios.put(`${API_BASE}/articles/${articleId}/review`, updateFields, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...updateFields }) : a));
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...updateFields, admin_unread: false, student_unread: true }) : a));
     } catch (err) {
-      setArticles(articles.map(a => a.id === articleId ? { ...a, ...updateFields } : a));
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...updateFields, admin_unread: false, student_unread: true } : a));
     }
   };
 
@@ -134,31 +184,9 @@ export function App() {
       const res = await axios.put(`${API_BASE}/articles/${articleId}/publish`, { is_published }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      setArticles(articles.map(a => a.id === articleId ? { ...a, is_published, published: is_published } : a));
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, is_published, status: is_published ? 'Published' : a.status, admin_unread: false, student_unread: true }) : a));
     } catch (err) {
-      setArticles(articles.map(a => a.id === articleId ? { ...a, is_published, published: is_published } : a));
-    }
-  };
-
-  const handleUpdateConference = async (confId, updatedData) => {
-    try {
-      const res = await axios.put(`${API_BASE}/admin/conferences/${confId}`, updatedData, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      setConferences(conferences.map(c => c.id === confId ? res.data.conference : c));
-    } catch (err) {
-      setConferences(conferences.map(c => c.id === confId ? { ...c, ...updatedData } : c));
-    }
-  };
-
-  const handleCreateInvestor = async (investorData) => {
-    try {
-      const res = await axios.post(`${API_BASE}/admin/create-investor`, investorData, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      return res.data;
-    } catch (err) {
-      alert(err.response?.data?.message || 'Error creating investor account');
+      setArticles(articles.map(a => a.id === articleId ? { ...a, is_published, status: is_published ? 'Published' : a.status, admin_unread: false, student_unread: true } : a));
     }
   };
 
@@ -167,35 +195,86 @@ export function App() {
       const res = await axios.put(`${API_BASE}/articles/${articleId}/revise`, revisionData, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      setArticles(articles.map(a => a.id === articleId ? res.data.article : a));
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...revisionData, status: 'Revised - Awaiting Review', admin_unread: true, student_unread: false }) : a));
     } catch (err) {
-      setArticles(articles.map(a => a.id === articleId ? { ...a, ...revisionData, status: 'Revised' } : a));
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...revisionData, status: 'Revised - Awaiting Review', admin_unread: true, student_unread: false } : a));
     }
   };
 
   const handlePayPublicationFee = async (articleId, paymentData) => {
-    const payload = typeof paymentData === 'string' ? { receipt_url: paymentData } : paymentData;
     try {
-      const res = await axios.post(`${API_BASE}/articles/${articleId}/pay-publication`, payload, {
+      const res = await axios.post(`${API_BASE}/articles/${articleId}/pay-publication`, paymentData, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...payload, publication_fee_paid: true, status: 'Pub Fee Paid' }) : a));
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...paymentData, publication_fee_paid: true, status: 'Pub Fee Paid - Verify & Publish', admin_unread: true, student_unread: false }) : a));
     } catch (err) {
-      setArticles(articles.map(a => a.id === articleId ? { ...a, ...payload, publication_fee_paid: true, status: 'Pub Fee Paid' } : a));
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...paymentData, publication_fee_paid: true, status: 'Pub Fee Paid - Verify & Publish', admin_unread: true, student_unread: false } : a));
     }
   };
 
   const handleApplyConference = async (articleId, paymentData) => {
-    const payload = typeof paymentData === 'string' ? { receipt_url: paymentData } : paymentData;
     try {
-      const res = await axios.post(`${API_BASE}/articles/${articleId}/apply-conference`, payload, {
+      const res = await axios.post(`${API_BASE}/articles/${articleId}/apply-conference`, paymentData, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...payload, presentation_fee_paid: true, status: 'Presentation Scheduled' }) : a));
+      setArticles(articles.map(a => a.id === articleId ? (res.data.article || { ...a, ...paymentData, presentation_fee_paid: true, status: 'Presentation Scheduled', admin_unread: true, student_unread: false }) : a));
     } catch (err) {
-      setArticles(articles.map(a => a.id === articleId ? { ...a, ...payload, presentation_fee_paid: true, status: 'Presentation Scheduled' } : a));
+      setArticles(articles.map(a => a.id === articleId ? { ...a, ...paymentData, presentation_fee_paid: true, status: 'Presentation Scheduled', admin_unread: true, student_unread: false } : a));
     }
   };
+
+  const handleMarkRead = async (articleId) => {
+    try {
+      await axios.put(`${API_BASE}/articles/${articleId}/mark-read`, {}, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+    } catch (err) {
+      // ignore
+    }
+    setArticles(articles.map(a => {
+      if (a.id === articleId) {
+        if (user?.role === 'admin') return { ...a, admin_unread: false };
+        return { ...a, student_unread: false };
+      }
+      return a;
+    }));
+  };
+
+  const handleUpdateConference = async (confId, updatedData) => {
+    const freshConf = { id: confId, ...updatedData };
+    setConferences(prev => {
+      if (!prev || prev.length === 0) return [freshConf];
+      const index = prev.findIndex(c => c.id == confId);
+      if (index === -1) return [freshConf, ...prev];
+      return prev.map(c => c.id == confId ? { ...c, ...updatedData } : c);
+    });
+
+    try {
+      const res = await axios.put(`${API_BASE}/admin/conferences/${confId}`, updatedData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.data?.conference) {
+        setConferences(prev => prev.map(c => c.id == confId ? res.data.conference : c));
+      }
+    } catch (err) {
+      console.log('Conference saved to memory state');
+    }
+  };
+
+  const handleCreateInvestor = async (investorData) => {
+    try {
+      const res = await axios.post(`${API_BASE}/admin/create-investor`, investorData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.data?.investor) {
+        setRegisteredInvestors(prev => [...prev, res.data.investor]);
+      }
+      return res.data;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error creating investor account');
+    }
+  };
+
 
   const handleSubmitInvestorReview = async (reviewData) => {
     try {
@@ -235,11 +314,11 @@ export function App() {
           </div>
 
           {/* Strictly Enforced Role-Based Navbar */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+          <nav className="hidden md:flex items-center gap-1.5 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
             <button
-              onClick={() => setActiveTab('gallery')}
+              onClick={() => navigate('/')}
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                activeTab === 'gallery' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                location.pathname === '/' || location.pathname === '/gallery' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
               <ImageIcon className="w-4 h-4" /> Public Gallery & Showcase
@@ -248,9 +327,9 @@ export function App() {
             {/* Logged in Student Access Only */}
             {user && user.role === 'student' && (
               <button
-                onClick={() => setActiveTab('student')}
+                onClick={() => navigate('/student')}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                  activeTab === 'student' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  location.pathname.startsWith('/student') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <GraduationCap className="w-4 h-4" /> Student Portal
@@ -260,9 +339,9 @@ export function App() {
             {/* Logged in Admin Access Only */}
             {user && user.role === 'admin' && (
               <button
-                onClick={() => setActiveTab('admin')}
+                onClick={() => navigate('/admin')}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                  activeTab === 'admin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  location.pathname.startsWith('/admin') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <ShieldCheck className="w-4 h-4" /> Admin Control Panel
@@ -272,9 +351,9 @@ export function App() {
             {/* Logged in Investor Access Only */}
             {user && user.role === 'investor' && (
               <button
-                onClick={() => setActiveTab('investor')}
+                onClick={() => navigate('/investor')}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                  activeTab === 'investor' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  location.pathname.startsWith('/investor') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Briefcase className="w-4 h-4" /> Investor Portal
@@ -284,9 +363,9 @@ export function App() {
             {/* Logged in Attendee Access Only */}
             {user && user.role === 'attendee' && (
               <button
-                onClick={() => setActiveTab('attendee')}
+                onClick={() => navigate('/attendee')}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                  activeTab === 'attendee' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  location.pathname.startsWith('/attendee') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Ticket className="w-4 h-4" /> Tickets & Live Event
@@ -322,63 +401,88 @@ export function App() {
         </div>
       </header>
 
-      {/* Main Page Body */}
+      {/* Dedicated URL Page Routes */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-        {activeTab === 'gallery' && (
-          <PublicGallery
-            gallery={gallery}
-            articles={articles}
-            investorReviews={investorReviews}
-            conferences={conferences}
-            onNavigateToLogin={(targetRole) => {
-              if (targetRole) {
-                setAuthData(prev => ({ ...prev, role: targetRole }));
-                setAuthMode('register');
-              }
-              setShowAuthModal(true);
-            }}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <PublicGallery
+                gallery={gallery}
+                articles={articles}
+                investorReviews={investorReviews}
+                conferences={conferences}
+                onNavigateToLogin={(targetRole) => {
+                  if (targetRole) {
+                    setAuthData(prev => ({ ...prev, role: targetRole }));
+                    setAuthMode('register');
+                  }
+                  setShowAuthModal(true);
+                }}
+              />
+            }
           />
-        )}
+          <Route path="/gallery" element={<Navigate to="/" replace />} />
 
-        {activeTab === 'student' && (
-          <StudentDashboard
-            user={user || { id: 2, full_name: 'Ali Ahmed (Demo)', role: 'student' }}
-            articles={articles}
-            onArticleSubmit={handleArticleSubmit}
-            onReviseArticle={handleReviseArticle}
-            onPayPublicationFee={handlePayPublicationFee}
-            onApplyConference={handleApplyConference}
+          <Route
+            path="/student"
+            element={
+              <StudentDashboard
+                user={user || { id: 2, full_name: 'Ali Ahmed (Demo)', role: 'student' }}
+                articles={articles}
+                onArticleSubmit={handleArticleSubmit}
+                onReviseArticle={handleReviseArticle}
+                onPayPublicationFee={handlePayPublicationFee}
+                onApplyConference={handleApplyConference}
+                onMarkRead={handleMarkRead}
+              />
+            }
           />
-        )}
 
-        {activeTab === 'admin' && (
-          <AdminDashboard
-            articles={articles}
-            conferences={conferences}
-            onUpdateArticle={handleUpdateArticle}
-            onPublishArticle={handlePublishArticle}
-            onUpdateConference={handleUpdateConference}
-            onCreateInvestor={handleCreateInvestor}
+          <Route
+            path="/admin"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
           />
-        )}
 
-        {activeTab === 'investor' && (
-          <InvestorDashboard
-            user={user || { id: 3, full_name: 'John Malik (Demo)', role: 'investor', organization: 'Apex Tech Fund' }}
-            articles={articles}
-            investorReviews={investorReviews}
-            onSubmitReview={handleSubmitInvestorReview}
+          <Route
+            path="/investor"
+            element={
+              <InvestorDashboard
+                user={user || { id: 3, full_name: 'John Malik (Demo)', role: 'investor', organization: 'Apex Tech Fund' }}
+                articles={articles}
+                investorReviews={investorReviews}
+                onSubmitReview={handleSubmitInvestorReview}
+              />
+            }
           />
-        )}
 
-        {activeTab === 'attendee' && (
-          <AttendeeDashboard
-            user={user || { id: 4, full_name: 'Sara Khan (Demo)', role: 'attendee' }}
-            conferences={conferences}
-            tickets={tickets}
-            onBookTicket={handleBookTicket}
+          <Route
+            path="/attendee"
+            element={
+              <AttendeeDashboard
+                user={user || { id: 4, full_name: 'Sara Khan (Demo)', role: 'attendee' }}
+                conferences={conferences}
+                tickets={tickets}
+                onBookTicket={handleBookTicket}
+              />
+            }
           />
-        )}
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       {/* Auth Modal */}
@@ -421,14 +525,24 @@ export function App() {
 
               <div>
                 <label className="text-xs text-slate-400 block mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={authData.password}
-                  onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={authData.password}
+                    onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 pr-10 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                    title={showPassword ? "Hide Password" : "Show Password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4 text-blue-400" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {authMode === 'register' && (

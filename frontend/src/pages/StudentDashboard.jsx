@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText,
   PlusCircle,
@@ -35,7 +36,17 @@ export const StudentDashboard = ({
   onApplyConference,
   onMarkRead
 }) => {
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [showSubmitModal, setShowSubmitModal] = useState(() => location.pathname === '/student/submit');
+
+  useEffect(() => {
+    if (location.pathname === '/student/submit') {
+      setShowSubmitModal(true);
+    }
+  }, [location.pathname]);
+
   const [activeRevisionArticle, setActiveRevisionArticle] = useState(null);
   const [activePubFeeArticle, setActivePubFeeArticle] = useState(null);
   const [activeConfFeeArticle, setActiveConfFeeArticle] = useState(null);
@@ -78,6 +89,9 @@ export const StudentDashboard = ({
     setSenderMobile('0300-1234567');
     setPresentingStudentsList('');
     setShowSubmitModal(false);
+    if (location.pathname === '/student/submit') {
+      navigate('/student');
+    }
     setActiveRevisionArticle(null);
     setActivePubFeeArticle(null);
     setActiveConfFeeArticle(null);
@@ -242,6 +256,7 @@ ET`;
           onClick={() => {
             resetForms();
             setShowSubmitModal(true);
+            navigate('/student/submit');
           }}
           className="px-6 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-extrabold rounded-2xl text-xs transition shadow-xl shadow-blue-600/30 flex items-center gap-2 transform hover:-translate-y-0.5"
         >
@@ -271,6 +286,7 @@ ET`;
               onClick={() => {
                 resetForms();
                 setShowSubmitModal(true);
+                navigate('/student/submit');
               }}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition inline-flex items-center gap-2"
             >

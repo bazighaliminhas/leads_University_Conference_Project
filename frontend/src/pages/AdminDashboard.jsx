@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ShieldCheck,
   Edit3,
@@ -41,7 +42,28 @@ export const AdminDashboard = ({
   onMarkRead,
   onNavigateTab
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState('articles'); // 'articles', 'conference', 'investors'
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getSubTabFromPath = () => {
+    if (location.pathname.includes('/conference')) return 'conference';
+    if (location.pathname.includes('/investors')) return 'investors';
+    return 'articles';
+  };
+
+  const [activeSubTab, setActiveSubTab] = useState(getSubTabFromPath);
+
+  useEffect(() => {
+    setActiveSubTab(getSubTabFromPath());
+  }, [location.pathname]);
+
+  const switchTab = (tab) => {
+    setActiveSubTab(tab);
+    if (tab === 'articles') navigate('/admin/articles');
+    else if (tab === 'conference') navigate('/admin/conference');
+    else if (tab === 'investors') navigate('/admin/investors');
+  };
+
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [viewProofModal, setViewProofModal] = useState(null); // { title, url, type }
   const [tier, setTier] = useState('None');
@@ -198,7 +220,7 @@ export const AdminDashboard = ({
       };
     });
 
-    setActiveSubTab('conference');
+    switchTab('conference');
     setConferenceAlertMsg(`🎤 Added '${studentName}' with project '${art.title}' to the Stage Lineup! Scroll down to review and click 'Save & Update Live Conference Post'.`);
     setTimeout(() => setConferenceAlertMsg(''), 8000);
   };
@@ -334,7 +356,7 @@ ET`;
         {/* Sub-Navigation Tabs */}
         <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800">
           <button
-            onClick={() => setActiveSubTab('articles')}
+            onClick={() => switchTab('articles')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
               activeSubTab === 'articles'
                 ? 'bg-blue-600 text-white shadow-md'
@@ -348,7 +370,7 @@ ET`;
           </button>
 
           <button
-            onClick={() => setActiveSubTab('conference')}
+            onClick={() => switchTab('conference')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
               activeSubTab === 'conference'
                 ? 'bg-blue-600 text-white shadow-md'
@@ -364,7 +386,7 @@ ET`;
           </button>
 
           <button
-            onClick={() => setActiveSubTab('investors')}
+            onClick={() => switchTab('investors')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
               activeSubTab === 'investors'
                 ? 'bg-blue-600 text-white shadow-md'

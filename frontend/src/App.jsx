@@ -115,6 +115,24 @@ export function App() {
     }
   };
 
+  // Sync route with Auth Modal if navigating to /login or /register
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      setAuthMode('login');
+      setShowAuthModal(true);
+    } else if (location.pathname === '/register') {
+      setAuthMode('register');
+      setShowAuthModal(true);
+    }
+  }, [location.pathname]);
+
+  const handleCloseAuthModal = () => {
+    setShowAuthModal(false);
+    if (location.pathname === '/login' || location.pathname === '/register') {
+      navigate('/');
+    }
+  };
+
   const handleLogout = () => {
     setUser(null);
     setToken('');
@@ -303,7 +321,7 @@ export function App() {
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/80 shadow-xl">
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3.5 cursor-pointer" onClick={() => setActiveTab('gallery')}>
+          <div className="flex items-center gap-3.5 cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25 border border-blue-400/30">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
@@ -365,7 +383,7 @@ export function App() {
               <button
                 onClick={() => navigate('/attendee')}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                  location.pathname.startsWith('/attendee') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  location.pathname.startsWith('/attendee') || location.pathname.startsWith('/tickets') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Ticket className="w-4 h-4" /> Tickets & Live Event
@@ -391,7 +409,10 @@ export function App() {
               </div>
             ) : (
               <button
-                onClick={() => setShowAuthModal(true)}
+                onClick={() => {
+                  setAuthMode('login');
+                  navigate('/login');
+                }}
                 className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-blue-600/30"
               >
                 <LogIn className="w-4 h-4" /> Register / Login
@@ -404,10 +425,12 @@ export function App() {
       {/* Dedicated URL Page Routes */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
         <Routes>
+          {/* Public Gallery / Landing Page & Article Detail Routes */}
           <Route
             path="/"
             element={
               <PublicGallery
+                user={user}
                 gallery={gallery}
                 articles={articles}
                 investorReviews={investorReviews}
@@ -415,15 +438,84 @@ export function App() {
                 onNavigateToLogin={(targetRole) => {
                   if (targetRole) {
                     setAuthData(prev => ({ ...prev, role: targetRole }));
-                    setAuthMode('register');
                   }
-                  setShowAuthModal(true);
+                  setAuthMode('register');
+                  navigate('/register');
                 }}
               />
             }
           />
           <Route path="/gallery" element={<Navigate to="/" replace />} />
+          <Route
+            path="/article/:id"
+            element={
+              <PublicGallery
+                user={user}
+                gallery={gallery}
+                articles={articles}
+                investorReviews={investorReviews}
+                conferences={conferences}
+                onNavigateToLogin={(targetRole) => {
+                  if (targetRole) setAuthData(prev => ({ ...prev, role: targetRole }));
+                  setAuthMode('register');
+                  navigate('/register');
+                }}
+              />
+            }
+          />
+          <Route
+            path="/paper/:id"
+            element={
+              <PublicGallery
+                user={user}
+                gallery={gallery}
+                articles={articles}
+                investorReviews={investorReviews}
+                conferences={conferences}
+                onNavigateToLogin={(targetRole) => {
+                  if (targetRole) setAuthData(prev => ({ ...prev, role: targetRole }));
+                  setAuthMode('register');
+                  navigate('/register');
+                }}
+              />
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicGallery
+                user={user}
+                gallery={gallery}
+                articles={articles}
+                investorReviews={investorReviews}
+                conferences={conferences}
+                onNavigateToLogin={(targetRole) => {
+                  if (targetRole) setAuthData(prev => ({ ...prev, role: targetRole }));
+                  setAuthMode('register');
+                  navigate('/register');
+                }}
+              />
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicGallery
+                user={user}
+                gallery={gallery}
+                articles={articles}
+                investorReviews={investorReviews}
+                conferences={conferences}
+                onNavigateToLogin={(targetRole) => {
+                  if (targetRole) setAuthData(prev => ({ ...prev, role: targetRole }));
+                  setAuthMode('register');
+                  navigate('/register');
+                }}
+              />
+            }
+          />
 
+          {/* Student Dashboard Routes */}
           <Route
             path="/student"
             element={
@@ -438,7 +530,36 @@ export function App() {
               />
             }
           />
+          <Route
+            path="/student/submit"
+            element={
+              <StudentDashboard
+                user={user || { id: 2, full_name: 'Ali Ahmed (Demo)', role: 'student' }}
+                articles={articles}
+                onArticleSubmit={handleArticleSubmit}
+                onReviseArticle={handleReviseArticle}
+                onPayPublicationFee={handlePayPublicationFee}
+                onApplyConference={handleApplyConference}
+                onMarkRead={handleMarkRead}
+              />
+            }
+          />
+          <Route
+            path="/student/paper/:id"
+            element={
+              <StudentDashboard
+                user={user || { id: 2, full_name: 'Ali Ahmed (Demo)', role: 'student' }}
+                articles={articles}
+                onArticleSubmit={handleArticleSubmit}
+                onReviseArticle={handleReviseArticle}
+                onPayPublicationFee={handlePayPublicationFee}
+                onApplyConference={handleApplyConference}
+                onMarkRead={handleMarkRead}
+              />
+            }
+          />
 
+          {/* Admin Control Panel Routes */}
           <Route
             path="/admin"
             element={
@@ -455,7 +576,72 @@ export function App() {
               />
             }
           />
+          <Route
+            path="/admin/articles"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
+          />
+          <Route
+            path="/admin/review/:id"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
+          />
+          <Route
+            path="/admin/conference"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
+          />
+          <Route
+            path="/admin/investors"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
+          />
 
+          {/* Investor Portal Route */}
           <Route
             path="/investor"
             element={
@@ -467,7 +653,19 @@ export function App() {
               />
             }
           />
+          <Route
+            path="/investor/evaluate/:id"
+            element={
+              <InvestorDashboard
+                user={user || { id: 3, full_name: 'John Malik (Demo)', role: 'investor', organization: 'Apex Tech Fund' }}
+                articles={articles}
+                investorReviews={investorReviews}
+                onSubmitReview={handleSubmitInvestorReview}
+              />
+            }
+          />
 
+          {/* Attendee Portal Routes */}
           <Route
             path="/attendee"
             element={
@@ -479,6 +677,8 @@ export function App() {
               />
             }
           />
+          <Route path="/tickets" element={<Navigate to="/attendee" replace />} />
+          <Route path="/conferences" element={<Navigate to="/attendee" replace />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -486,9 +686,15 @@ export function App() {
       </main>
 
       {/* Auth Modal */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="w-full max-w-md glass-card rounded-3xl p-6 border border-slate-800 relative shadow-2xl">
+      {(showAuthModal || location.pathname === '/login' || location.pathname === '/register') && (
+        <div
+          onClick={handleCloseAuthModal}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md glass-card rounded-3xl p-6 border border-slate-800 relative shadow-2xl"
+          >
             <h3 className="text-2xl font-bold text-white mb-1">
               {authMode === 'login' ? 'Welcome Back' : 'Create Portal Account'}
             </h3>
@@ -585,7 +791,11 @@ export function App() {
                   {authMode === 'login' ? "Don't have an account?" : "Already registered?"}{' '}
                   <button
                     type="button"
-                    onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                    onClick={() => {
+                      const nextMode = authMode === 'login' ? 'register' : 'login';
+                      setAuthMode(nextMode);
+                      navigate(`/${nextMode}`);
+                    }}
                     className="text-blue-400 font-bold hover:underline"
                   >
                     {authMode === 'login' ? 'Register Now' : 'Login Here'}
@@ -595,7 +805,7 @@ export function App() {
             </form>
 
             <button
-              onClick={() => setShowAuthModal(false)}
+              onClick={handleCloseAuthModal}
               className="absolute top-4 right-4 text-slate-500 hover:text-white text-sm"
             >
               ✕

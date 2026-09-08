@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS `conferences` (
   `event_time` VARCHAR(100) DEFAULT '10:00 AM - 04:00 PM',
   `venue` VARCHAR(255),
   `stream_link` VARCHAR(255),
-  `onsite_ticket_price` DECIMAL(10,2) DEFAULT 50.00,
-  `online_ticket_price` DECIMAL(10,2) DEFAULT 20.00,
+  `onsite_ticket_price` DECIMAL(10,2) DEFAULT 500.00,
+  `online_ticket_price` DECIMAL(10,2) DEFAULT 200.00,
   `presenting_students` TEXT,
   `attending_investors` TEXT,
   `status` VARCHAR(50) DEFAULT 'Upcoming'

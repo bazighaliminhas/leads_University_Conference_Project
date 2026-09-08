@@ -14,8 +14,8 @@ export const AttendeeDashboard = ({ user, conferences = [], tickets = [], onBook
     event_time: '10:00 AM - 04:00 PM',
     venue: 'University Main Auditorium & HD Stream',
     stream_link: 'https://meet.google.com/xyz-demo-stream',
-    onsite_ticket_price: 50,
-    online_ticket_price: 20
+    onsite_ticket_price: 500,
+    online_ticket_price: 200
   };
 
   const userTickets = tickets.filter(t => t.user_id === user.id || t.user_name === user.full_name);
@@ -42,9 +42,8 @@ export const AttendeeDashboard = ({ user, conferences = [], tickets = [], onBook
         {/* Payment Required Toggle */}
         <button
           onClick={() => setPaymentRequired(!paymentRequired)}
-          className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-            paymentRequired ? 'bg-amber-950/60 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-emerald-400 border-slate-700'
-          }`}
+          className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${paymentRequired ? 'bg-amber-950/60 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-emerald-400 border-slate-700'
+            }`}
           title="Click to toggle ticket payment mandatory mode"
         >
           {paymentRequired ? <ToggleRight className="w-5 h-5 text-amber-400" /> : <ToggleLeft className="w-5 h-5 text-slate-500" />}
@@ -124,9 +123,8 @@ export const AttendeeDashboard = ({ user, conferences = [], tickets = [], onBook
               <div key={t.id} className="bg-slate-900/80 rounded-3xl p-6 border border-slate-800 space-y-4 shadow-xl">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className={`text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${
-                      t.ticket_type === 'onsite' ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40' : 'bg-blue-950 text-blue-400 border border-blue-500/40'
-                    }`}>
+                    <span className={`text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${t.ticket_type === 'onsite' ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40' : 'bg-blue-950 text-blue-400 border border-blue-500/40'
+                      }`}>
                       {t.ticket_type} Access Pass
                     </span>
                     <h3 className="text-lg font-black text-white tracking-tight mt-2">{t.ticket_code}</h3>

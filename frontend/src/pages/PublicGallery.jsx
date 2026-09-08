@@ -95,7 +95,7 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
 
         <div className="relative z-10 max-w-4xl space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-inner">
-            <Sparkles className="w-4 h-4 text-blue-400 animate-spin" style={{ animationDuration: '4s' }} /> 
+            <Sparkles className="w-4 h-4 text-blue-400 animate-spin" style={{ animationDuration: '4s' }} />
             <span>Official University Innovation & Global Venture Ecosystem</span>
           </div>
 
@@ -253,11 +253,10 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-                  selectedCategory === cat
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${selectedCategory === cat
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 {cat === 'All' ? 'All Innovations' : cat === 'Funded' ? '💰 Seed Funded' : `${cat} Tier`}
               </button>
@@ -281,7 +280,7 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                    
+
                     <div className="absolute top-4 left-4 right-4 flex justify-between items-center gap-2">
                       <span className="text-xs font-bold text-amber-300 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-amber-500/40 shadow-lg flex items-center gap-1.5">
                         <Award className="w-3.5 h-3.5 text-amber-400" /> Seed Funding Pledged
@@ -328,7 +327,7 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
       {/* SECTION 3: LIVE CONFERENCE SHOWCASE WITH 1-4 PRESENTING STUDENTS & ATTENDING INVESTORS */}
       <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/70 rounded-3xl p-8 sm:p-12 border border-slate-800 relative overflow-hidden space-y-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-        
+
         {/* Summit Banner Image & Main Info Header */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
           <div className="lg:col-span-7 space-y-4">
@@ -415,11 +414,11 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
                 <span className="text-[10px] text-slate-400 block font-semibold">🎟️ Physical Onsite Pass</span>
-                <span className="text-base font-black text-emerald-400">PKR / USD {conf.onsite_ticket_price || '50.00'}</span>
+                <span className="text-base font-black text-emerald-400">PKR {conf.onsite_ticket_price || '500.00'}</span>
               </div>
               <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
                 <span className="text-[10px] text-slate-400 block font-semibold">🎟️ Online HD Stream Pass</span>
-                <span className="text-base font-black text-blue-400">PKR / USD {conf.online_ticket_price || '20.00'}</span>
+                <span className="text-base font-black text-blue-400">PKR {conf.online_ticket_price || '200.00'}</span>
               </div>
             </div>
           </div>
@@ -481,7 +480,7 @@ export const PublicGallery = ({ user, gallery = [], articles = [], investorRevie
                 </div>
 
                 <h4 className="font-bold text-white text-sm leading-snug line-clamp-2">{rev.article_title}</h4>
-                
+
                 <p className="text-xs text-slate-300 italic bg-slate-900/90 p-3.5 rounded-xl border border-slate-800/80 leading-relaxed">
                   "{rev.comments}"
                 </p>

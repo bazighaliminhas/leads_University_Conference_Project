@@ -100,8 +100,8 @@ async function initDatabase() {
         \`event_date\` VARCHAR(100),
         \`venue\` VARCHAR(255),
         \`stream_link\` VARCHAR(255),
-        \`onsite_ticket_price\` DECIMAL(10,2) DEFAULT 50.00,
-        \`online_ticket_price\` DECIMAL(10,2) DEFAULT 20.00,
+        \`onsite_ticket_price\` DECIMAL(10,2) DEFAULT 500.00,
+        \`online_ticket_price\` DECIMAL(10,2) DEFAULT 200.00,
         \`status\` VARCHAR(50) DEFAULT 'Upcoming'
       );
     `);
@@ -359,8 +359,8 @@ let mockConferences = [
     event_time: '10:00 AM - 04:00 PM',
     venue: 'University Main Auditorium & Global HD Live Stream',
     stream_link: 'https://meet.google.com/xyz-demo-stream',
-    onsite_ticket_price: 50.00,
-    online_ticket_price: 20.00,
+    onsite_ticket_price: 500.00,
+    online_ticket_price: 200.00,
     presenting_students: 'Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography), Ali Ahmed (Biocompatible Nanoparticles), Ali Ahmed (Agri Drones)',
     attending_investors: 'John Malik (Apex Tech Capital - investor@venture.com), Dr. Sarah Vance (BioHealth VC - sarah@biohealthvc.com), Hamza Qureshi (FinTech Angels - hamza@fintechangels.com)',
     status: 'Upcoming'
@@ -961,8 +961,8 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
       const updatedStudents = presenting_students !== undefined ? presenting_students : current.presenting_students;
       const updatedInvestors = attending_investors !== undefined ? attending_investors : current.attending_investors;
       const updatedStatus = status || current.status;
-      const updatedOnsitePrice = onsite_ticket_price !== undefined ? onsite_ticket_price : (current.onsite_ticket_price || 50.00);
-      const updatedOnlinePrice = online_ticket_price !== undefined ? online_ticket_price : (current.online_ticket_price || 20.00);
+      const updatedOnsitePrice = onsite_ticket_price !== undefined ? onsite_ticket_price : (current.onsite_ticket_price || 500.00);
+      const updatedOnlinePrice = online_ticket_price !== undefined ? online_ticket_price : (current.online_ticket_price || 200.00);
 
       await db.query(
         'UPDATE conferences SET title = ?, description = ?, cover_image = ?, event_date = ?, event_time = ?, venue = ?, stream_link = ?, presenting_students = ?, attending_investors = ?, status = ?, onsite_ticket_price = ?, online_ticket_price = ? WHERE id = ?',

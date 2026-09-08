@@ -81,8 +81,8 @@ export const AdminDashboard = ({
     event_time: '10:00 AM - 04:00 PM',
     venue: 'University Main Auditorium & Global HD Live Stream',
     stream_link: 'https://meet.google.com/xyz-demo-stream',
-    onsite_ticket_price: 50.00,
-    online_ticket_price: 20.00,
+    onsite_ticket_price: 500.00,
+    online_ticket_price: 200.00,
     presenting_students: 'Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography)',
     attending_investors: 'John Malik (Apex Tech Capital - investor@venture.com), Dr. Sarah Vance (BioHealth VC - sarah@biohealthvc.com)',
     status: 'Upcoming'
@@ -96,8 +96,8 @@ export const AdminDashboard = ({
     event_time: activeConf?.event_time || '10:00 AM - 04:00 PM',
     venue: activeConf?.venue || 'University Main Auditorium',
     stream_link: activeConf?.stream_link || 'https://meet.google.com/xyz-demo-stream',
-    onsite_ticket_price: activeConf?.onsite_ticket_price || 50.00,
-    online_ticket_price: activeConf?.online_ticket_price || 20.00,
+    onsite_ticket_price: activeConf?.onsite_ticket_price || 500.00,
+    online_ticket_price: activeConf?.online_ticket_price || 200.00,
     presenting_students: activeConf?.presenting_students || 'Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography)',
     attending_investors: activeConf?.attending_investors || 'John Malik (Apex Tech Capital - investor@venture.com), Dr. Sarah Vance (BioHealth VC - sarah@biohealthvc.com)',
     status: activeConf?.status || 'Upcoming'
@@ -117,8 +117,8 @@ export const AdminDashboard = ({
         event_time: c.event_time || '10:00 AM - 04:00 PM',
         venue: c.venue || 'University Main Auditorium',
         stream_link: c.stream_link || 'https://meet.google.com/xyz-demo-stream',
-        onsite_ticket_price: c.onsite_ticket_price || 50.00,
-        online_ticket_price: c.online_ticket_price || 20.00,
+        onsite_ticket_price: c.onsite_ticket_price || 500.00,
+        online_ticket_price: c.online_ticket_price || 200.00,
         presenting_students: c.presenting_students || '',
         attending_investors: c.attending_investors || '',
         status: c.status || 'Upcoming'
@@ -233,7 +233,7 @@ export const AdminDashboard = ({
     const matchedInvestor = registeredInvestors?.find(inv => inv.email === selectedEmail);
     if (matchedInvestor) {
       const formattedEntry = `${matchedInvestor.full_name} (${matchedInvestor.organization || 'Venture Capital'} - ${matchedInvestor.email})`;
-      
+
       setConfData(prev => {
         const current = prev.attending_investors || '';
         if (current.includes(matchedInvestor.email)) return prev;
@@ -357,11 +357,10 @@ ET`;
         <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800">
           <button
             onClick={() => switchTab('articles')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeSubTab === 'articles'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeSubTab === 'articles'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             <FileText className="w-4 h-4" /> Articles & Reviews
             {articles.some(a => a.admin_unread) && (
@@ -371,11 +370,10 @@ ET`;
 
           <button
             onClick={() => switchTab('conference')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeSubTab === 'conference'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeSubTab === 'conference'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             <Calendar className="w-4 h-4" /> Conference Management
             {conferencePitchApplicants.length > 0 && (
@@ -387,11 +385,10 @@ ET`;
 
           <button
             onClick={() => switchTab('investors')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeSubTab === 'investors'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeSubTab === 'investors'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             <Users className="w-4 h-4" /> Provision Investors ({registeredInvestors.length})
           </button>
@@ -511,11 +508,10 @@ ET`;
               return (
                 <div
                   key={article.id}
-                  className={`glass-card rounded-3xl p-7 border transition-all duration-200 relative overflow-hidden ${
-                    showStar
-                      ? 'border-amber-500/60 shadow-xl shadow-amber-500/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 ring-1 ring-amber-500/30'
-                      : 'border-slate-800'
-                  }`}
+                  className={`glass-card rounded-3xl p-7 border transition-all duration-200 relative overflow-hidden ${showStar
+                    ? 'border-amber-500/60 shadow-xl shadow-amber-500/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 ring-1 ring-amber-500/30'
+                    : 'border-slate-800'
+                    }`}
                 >
                   {/* STAR NOTIFICATION BADGE FOR ADMIN */}
                   {showStar && (
@@ -524,10 +520,10 @@ ET`;
                       {isConfPitch
                         ? '⭐ CONFERENCE PITCH FEE PAID (PKR 5,000) — READY TO SCHEDULE'
                         : isPubFeeAwaiting
-                        ? '⭐ PUBLICATION FEE PAID — VERIFY PROOF & PUBLISH LIVE'
-                        : isResubmitted
-                        ? '⭐ STUDENT RE-SUBMITTED REVISED ARTICLE — READY FOR EVALUATION'
-                        : '⭐ NEW ARTICLE SUBMISSION — AWAITING REVIEW'}
+                          ? '⭐ PUBLICATION FEE PAID — VERIFY PROOF & PUBLISH LIVE'
+                          : isResubmitted
+                            ? '⭐ STUDENT RE-SUBMITTED REVISED ARTICLE — READY FOR EVALUATION'
+                            : '⭐ NEW ARTICLE SUBMISSION — AWAITING REVIEW'}
                     </div>
                   )}
 
@@ -810,7 +806,7 @@ ET`;
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-950/70 p-5 rounded-2xl border border-slate-800">
               <div>
                 <label className="text-xs text-emerald-400 font-bold block mb-1.5 flex items-center gap-1.5">
-                  <Ticket className="w-4 h-4" /> Onsite Physical Ticket Price (PKR / USD) *
+                  <Ticket className="w-4 h-4" /> Onsite Physical Ticket Price (PKR) *
                 </label>
                 <input
                   type="number"
@@ -825,7 +821,7 @@ ET`;
 
               <div>
                 <label className="text-xs text-blue-400 font-bold block mb-1.5 flex items-center gap-1.5">
-                  <Ticket className="w-4 h-4" /> Online Virtual HD Stream Ticket Price (PKR / USD) *
+                  <Ticket className="w-4 h-4" /> Online Virtual HD Stream Ticket Price (PKR) *
                 </label>
                 <input
                   type="number"

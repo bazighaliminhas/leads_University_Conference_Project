@@ -3,6 +3,17 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2');
 require('dotenv').config();
+const {
+  DEFAULT_ADMIN_WHATSAPP,
+  DEFAULT_ADMIN_EMAIL,
+  notificationHistory,
+  sendAdminWhatsApp,
+  sendAdminEmail,
+  notifyNewArticleSubmission,
+  notifyArticleResubmitted,
+  notifyPublicationFeePaid,
+  notifyPresentationFeePaid
+} = require('./notificationService');
 
 const app = express();
 app.use(cors());
@@ -642,7 +653,17 @@ app.post('/api/articles', authenticateToken, async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'None', 'None', TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, 'Submitted - Awaiting Review', ?)`,
         [req.user.id, req.user.full_name, title, abstract, text, category || 'General', pdf_url || 'default.pdf', submission_receipt_url, sender_bank, transaction_id, sender_mobile, plagiarism_score, created_at]
       );
-      const newArticle = { id: result.insertId, student_id: req.user.id, student_name: req.user.full_name, title, abstract, full_text: text, category: category || 'General', status: 'Submitted - Awaiting Review', created_at };
+      const newArticle = { id: result.insertId, student_id: req.user.id, student_name: req.user.full_name, title, abstract, full_text: text, category: category || 'General', status: 'Submitted - Awaiting Review', created_at, sender_bank, transaction_id, sender_mobile };
+      
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyNewArticleSubmission({
+        student: req.user,
+        article: newArticle,
+        senderBank: sender_bank,
+        transactionId: transaction_id,
+        senderMobile: sender_mobile
+      }).catch(err => console.error('Notification dispatch error:', err));
+
       return res.status(201).json({ message: 'Article submitted with challan payment proof!', article: newArticle });
     } catch (err) {
       isDbConnected = false;
@@ -676,6 +697,16 @@ app.post('/api/articles', authenticateToken, async (req, res) => {
   };
 
   mockArticles.unshift(newArticle);
+
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyNewArticleSubmission({
+    student: req.user,
+    article: newArticle,
+    senderBank: sender_bank,
+    transactionId: transaction_id,
+    senderMobile: sender_mobile
+  }).catch(err => console.error('Notification dispatch error:', err));
+
   res.status(201).json({ message: 'Article submitted with challan payment proof!', article: newArticle });
 });
 
@@ -722,6 +753,13 @@ app.put('/api/articles/:id/revise', authenticateToken, async (req, res) => {
         [title, abstract, full_text, pdf_url, articleId, req.user.id]
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
+      
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyArticleResubmitted({
+        student: req.user,
+        article: updatedRows[0]
+      }).catch(err => console.error('Notification dispatch error:', err));
+
       return res.json({ message: 'Corrected paper re-submitted for Admin evaluation!', article: updatedRows[0] });
     } catch (err) {
       return res.status(500).json({ message: 'Database error revising article' });
@@ -738,6 +776,13 @@ app.put('/api/articles/:id/revise', authenticateToken, async (req, res) => {
     article.admin_unread = true;
     article.student_unread = false;
   }
+
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyArticleResubmitted({
+    student: req.user,
+    article: article || { id: articleId, title }
+  }).catch(err => console.error('Notification dispatch error:', err));
+
   res.json({ message: 'Corrected paper re-submitted for Admin evaluation!', article });
 });
 
@@ -755,6 +800,16 @@ app.post('/api/articles/:id/pay-publication', authenticateToken, async (req, res
         [receipt, sender_bank, transaction_id, sender_mobile, articleId]
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
+
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyPublicationFeePaid({
+        student: req.user,
+        article: updatedRows[0],
+        senderBank: sender_bank,
+        transactionId: transaction_id,
+        senderMobile: sender_mobile
+      }).catch(err => console.error('Notification dispatch error:', err));
+
       return res.json({ message: 'Publication fee challan proof submitted! Admin will verify and publish.', article: updatedRows[0] });
     } catch (err) {
       return res.status(500).json({ message: 'Database error recording publication receipt' });
@@ -772,6 +827,16 @@ app.post('/api/articles/:id/pay-publication', authenticateToken, async (req, res
     article.admin_unread = true;
     article.student_unread = false;
   }
+
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyPublicationFeePaid({
+    student: req.user,
+    article: article || { id: articleId },
+    senderBank: sender_bank,
+    transactionId: transaction_id,
+    senderMobile: sender_mobile
+  }).catch(err => console.error('Notification dispatch error:', err));
+
   res.json({ message: 'Publication fee challan proof submitted! Admin will verify and publish.', article });
 });
 
@@ -820,6 +885,17 @@ app.post('/api/articles/:id/apply-conference', authenticateToken, async (req, re
         [receipt, presenting_students_list, sender_bank, transaction_id, sender_mobile, articleId]
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
+
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyPresentationFeePaid({
+        student: req.user,
+        article: updatedRows[0],
+        presentingList: presenting_students_list,
+        senderBank: sender_bank,
+        transactionId: transaction_id,
+        senderMobile: sender_mobile
+      }).catch(err => console.error('Notification dispatch error:', err));
+
       return res.json({ message: 'Conference presentation fee receipt submitted! Scheduled for pitch.', article: updatedRows[0] });
     } catch (err) {
       return res.status(500).json({ message: 'Database error recording presentation application' });
@@ -838,6 +914,17 @@ app.post('/api/articles/:id/apply-conference', authenticateToken, async (req, re
     article.admin_unread = true;
     article.student_unread = false;
   }
+
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyPresentationFeePaid({
+    student: req.user,
+    article: article || { id: articleId },
+    presentingList: presenting_students_list,
+    senderBank: sender_bank,
+    transactionId: transaction_id,
+    senderMobile: sender_mobile
+  }).catch(err => console.error('Notification dispatch error:', err));
+
   res.json({ message: 'Conference presentation fee receipt submitted! Scheduled for pitch.', article });
 });
 
@@ -1379,6 +1466,52 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   };
 
   res.json({ message: 'Conference updated successfully!', conference: mockConferences[confIndex] });
+});
+
+// ================= ADMIN NOTIFICATIONS AUDIT LOG (KAPSO / TWILIO / EMAIL) =================
+
+// Get Notifications Log
+app.get('/api/admin/notifications', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can view notification dispatch logs' });
+  }
+
+  res.json({
+    admin_whatsapp: DEFAULT_ADMIN_WHATSAPP,
+    admin_email: DEFAULT_ADMIN_EMAIL,
+    kapso_configured: !!process.env.KAPSO_API_KEY,
+    twilio_configured: !!process.env.TWILIO_ACCOUNT_SID,
+    email_configured: !!process.env.SMTP_USER,
+    history: notificationHistory
+  });
+});
+
+// Send Test Notification to Admin WhatsApp & Email
+app.post('/api/admin/notifications/test', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can trigger test notifications' });
+  }
+
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' });
+  const testMessage = 
+`🧪 *TEST NOTIFICATION (KAPSO WHATSAPP DISPATCH)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Admin Target: ${DEFAULT_ADMIN_WHATSAPP}
+Admin Email: ${DEFAULT_ADMIN_EMAIL}
+Time: ${timestamp}
+Provider: Kapso WhatsApp Cloud API
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Twilio & Kapso notification pipes are fully active and connected to your conference portal!`;
+
+  await Promise.allSettled([
+    sendAdminWhatsApp(testMessage, { type: 'test' }),
+    sendAdminEmail('🧪 Test WhatsApp & Email Notification from Conference Portal', `<pre>${testMessage}</pre>`, testMessage, { type: 'test' })
+  ]);
+
+  res.json({
+    message: 'Test notification triggered successfully to WhatsApp & Email!',
+    history: notificationHistory
+  });
 });
 
 const PORT = process.env.PORT || 5000;

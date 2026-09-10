@@ -640,6 +640,22 @@ export function App() {
               />
             }
           />
+          <Route
+            path="/admin/notifications"
+            element={
+              <AdminDashboard
+                articles={articles}
+                conferences={conferences}
+                registeredInvestors={registeredInvestors}
+                onUpdateArticle={handleUpdateArticle}
+                onPublishArticle={handlePublishArticle}
+                onUpdateConference={handleUpdateConference}
+                onCreateInvestor={handleCreateInvestor}
+                onMarkRead={handleMarkRead}
+                onNavigateTab={(tab) => navigate(tab === 'gallery' ? '/' : `/${tab}`)}
+              />
+            }
+          />
 
           {/* Investor Portal Route */}
           <Route

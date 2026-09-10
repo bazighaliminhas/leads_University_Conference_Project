@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import {
   ShieldCheck,
   Edit3,
@@ -27,7 +28,14 @@ import {
   Building2,
   ExternalLink,
   ChevronDown,
-  Ticket
+  Ticket,
+  Bell,
+  Phone,
+  Mail,
+  Send,
+  MessageSquare,
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import { TierBadge } from '../components/TierBadge';
 
@@ -48,6 +56,7 @@ export const AdminDashboard = ({
   const getSubTabFromPath = () => {
     if (location.pathname.includes('/conference')) return 'conference';
     if (location.pathname.includes('/investors')) return 'investors';
+    if (location.pathname.includes('/notifications')) return 'notifications';
     return 'articles';
   };
 
@@ -62,6 +71,57 @@ export const AdminDashboard = ({
     if (tab === 'articles') navigate('/admin/articles');
     else if (tab === 'conference') navigate('/admin/conference');
     else if (tab === 'investors') navigate('/admin/investors');
+    else if (tab === 'notifications') navigate('/admin/notifications');
+  };
+
+  // WhatsApp & Email Notifications Audit Log State
+  const [notifState, setNotifState] = useState({
+    admin_whatsapp: '+923482727605',
+    admin_email: 'bazighminhas1@gmail.com',
+    history: []
+  });
+  const [testingNotif, setTestingNotif] = useState(false);
+  const [notifSuccessMsg, setNotifSuccessMsg] = useState('');
+  const [notifFilter, setNotifFilter] = useState('all');
+
+  const fetchNotificationLogs = async () => {
+    try {
+      const token = localStorage.getItem('univ_token');
+      const res = await axios.get('http://localhost:5000/api/admin/notifications', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifState({
+        admin_whatsapp: res.data.admin_whatsapp || '+923482727605',
+        admin_email: res.data.admin_email || 'bazighminhas1@gmail.com',
+        history: res.data.history || []
+      });
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchNotificationLogs();
+    const interval = setInterval(fetchNotificationLogs, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSendTestNotification = async () => {
+    setTestingNotif(true);
+    setNotifSuccessMsg('');
+    try {
+      const token = localStorage.getItem('univ_token');
+      await axios.post('http://localhost:5000/api/admin/notifications/test', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifSuccessMsg('🚀 Test notification dispatched to WhatsApp (+92 348 2727605) & Email (bazighminhas1@gmail.com)!');
+      fetchNotificationLogs();
+    } catch (err) {
+      setNotifSuccessMsg('⚠️ Could not trigger test notification.');
+    } finally {
+      setTestingNotif(false);
+      setTimeout(() => setNotifSuccessMsg(''), 6000);
+    }
   };
 
   const [selectedArticle, setSelectedArticle] = useState(null);
@@ -391,6 +451,21 @@ ET`;
               }`}
           >
             <Users className="w-4 h-4" /> Provision Investors ({registeredInvestors.length})
+          </button>
+
+          <button
+            onClick={() => switchTab('notifications')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeSubTab === 'notifications'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+              }`}
+          >
+            <Bell className="w-4 h-4 text-emerald-400" /> WhatsApp & Email (Kapso)
+            {notifState.history.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px]">
+                {notifState.history.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -1033,6 +1108,212 @@ ET`;
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUB-TAB 4: WHATSAPP & EMAIL DISPATCH LOGS (KAPSO AI & TWILIO)             */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'notifications' && (
+        <div className="space-y-6">
+          {/* Top Status & Channel Configuration Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* WhatsApp Target Card */}
+            <div className="glass-card rounded-3xl p-6 border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-950 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  <Phone className="w-5 h-5" />
+                </span>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live Hook
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Admin WhatsApp Number</p>
+                <h3 className="text-lg font-black text-white tracking-wide font-mono mt-0.5">
+                  {notifState.admin_whatsapp || '+92 348 2727605'}
+                </h3>
+              </div>
+              <div className="pt-2 border-t border-slate-800/80 text-[11px] text-emerald-400/90 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5" /> Engine: <strong>Kapso WhatsApp Cloud API</strong>
+              </div>
+            </div>
+
+            {/* Email Target Card */}
+            <div className="glass-card rounded-3xl p-6 border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-950 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                  <Mail className="w-5 h-5" />
+                </span>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  Active
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Admin Notification Email</p>
+                <h3 className="text-base font-black text-white tracking-tight font-mono mt-0.5 break-all">
+                  {notifState.admin_email || 'bazighminhas1@gmail.com'}
+                </h3>
+              </div>
+              <div className="pt-2 border-t border-slate-800/80 text-[11px] text-blue-400/90 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Instant HTML Summary Dispatches
+              </div>
+            </div>
+
+            {/* Manual Test & Diagnostic Trigger Card */}
+            <div className="glass-card rounded-3xl p-6 border border-slate-800 bg-slate-900/60 space-y-3 flex flex-col justify-between">
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Channel Health & Diagnostics</p>
+                <h3 className="text-sm font-bold text-white mt-1">
+                  Test WhatsApp & Email Delivery
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Sends an immediate test message to verify the WhatsApp & Email pipes.
+                </p>
+              </div>
+
+              <div>
+                {notifSuccessMsg && (
+                  <div className="mb-2 p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[11px] text-emerald-300 font-bold animate-fade-in">
+                    {notifSuccessMsg}
+                  </div>
+                )}
+                <button
+                  onClick={handleSendTestNotification}
+                  disabled={testingNotif}
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+                >
+                  {testingNotif ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Dispatching Test...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" /> Send Test Notification
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline / Live Message Audit Log */}
+          <div className="glass-card rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-emerald-400" /> Live Dispatches Timeline (Kapso AI & Twilio)
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Audit trail of all WhatsApp and Email alerts triggered across article submission, reviews, and fee payments.
+                </p>
+              </div>
+
+              {/* Filter & Refresh Controls */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+                  <button
+                    onClick={() => setNotifFilter('all')}
+                    className={`px-3 py-1 rounded-lg font-bold transition ${notifFilter === 'all' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    All ({notifState.history.length})
+                  </button>
+                  <button
+                    onClick={() => setNotifFilter('whatsapp')}
+                    className={`px-3 py-1 rounded-lg font-bold transition ${notifFilter === 'whatsapp' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    WhatsApp
+                  </button>
+                  <button
+                    onClick={() => setNotifFilter('email')}
+                    className={`px-3 py-1 rounded-lg font-bold transition ${notifFilter === 'email' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Email
+                  </button>
+                </div>
+
+                <button
+                  onClick={fetchNotificationLogs}
+                  className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 transition"
+                  title="Refresh Dispatch Feed"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* List of Messages */}
+            <div className="space-y-4">
+              {notifState.history.length === 0 ? (
+                <div className="text-center py-12 space-y-3 bg-slate-900/40 rounded-2xl border border-slate-800/80">
+                  <Bell className="w-10 h-10 text-slate-600 mx-auto" />
+                  <h4 className="text-base font-bold text-white">No Dispatches Recorded Yet</h4>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    When a student submits an article, resubmits a revision, or pays a fee, the notification will be immediately dispatched to WhatsApp and logged right here!
+                  </p>
+                  <button
+                    onClick={handleSendTestNotification}
+                    className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl transition"
+                  >
+                    Trigger Test Dispatch Now
+                  </button>
+                </div>
+              ) : (
+                notifState.history
+                  .filter(item => notifFilter === 'all' || item.channel === notifFilter)
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800/90 space-y-3 hover:border-slate-700 transition"
+                    >
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/60 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          {item.channel === 'whatsapp' ? (
+                            <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              <Phone className="w-4 h-4" />
+                            </span>
+                          ) : (
+                            <span className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                              <Mail className="w-4 h-4" />
+                            </span>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-white uppercase tracking-wider">
+                                {item.channel === 'whatsapp' ? 'WhatsApp Alert (Kapso)' : 'Email Notification'}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                                To: {item.recipient}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {new Date(item.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Karachi' })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            item.status.includes('delivered')
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                          }`}>
+                            ✓ {item.status.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Formatted Message Bubble Preview */}
+                      <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {item.content}
+                      </div>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
         </div>

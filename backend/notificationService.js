@@ -388,6 +388,118 @@ Their pitch presentation is now scheduled for the live summit where venture capi
   ]);
 }
 
+/**
+ * Event 5: Conference Created, Updated, or Published
+ */
+async function notifyConferencePublished({ conference, adminUser }) {
+  const confTitle = conference?.title || 'National Innovation & Research Conference';
+  const confDesc = conference?.description || 'Academic research presentation & investor venture summit.';
+  const eventDate = conference?.event_date || 'Upcoming';
+  const eventTime = conference?.event_time || '10:00 AM - 04:00 PM';
+  const venue = conference?.venue || 'University Main Auditorium & Virtual Stream';
+  const streamLink = conference?.stream_link || 'Virtual Link Attached';
+  const status = conference?.status || 'Upcoming Summit';
+  const onsitePrice = conference?.onsite_ticket_price !== undefined ? conference.onsite_ticket_price : '500.00';
+  const onlinePrice = conference?.online_ticket_price !== undefined ? conference.online_ticket_price : '200.00';
+  const presentingStudents = conference?.presenting_students || 'Selected Top Student Authors';
+  const attendingInvestors = conference?.attending_investors || 'Registered Venture Capitalists & Angels';
+  const date = new Date().toLocaleDateString('en-GB');
+
+  const whatsappMessage = 
+`🏛️ *CONFERENCE PUBLISHED / UPDATED (KAPSO NOTIFICATION)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📢 *Title:* ${confTitle}
+📅 *Event Date:* ${eventDate} (${eventTime})
+📍 *Venue:* ${venue}
+🎥 *HD Stream:* ${streamLink}
+📊 *Status:* ${status}
+🎟️ *Tickets:* Onsite PKR ${onsitePrice} | Online PKR ${onlinePrice}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+👥 *Presenting Student Teams:*
+${presentingStudents}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💼 *Attending Investors & VCs:*
+${attendingInvestors}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ *Summary:*
+The conference schedule, ticket availability, presenting lineup, and attending investor portfolio have been officially published live on the university portal!
+
+👉 *Live Portal:* http://localhost:5173/gallery
+👉 *Admin Schedule:* http://localhost:5173/admin/conference`;
+
+  const emailSubject = `🏛️ Conference Published / Updated: "${confTitle}" (${eventDate})`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <h2 style="color: #2563eb; margin-top: 0;">🏛️ Conference Published & Live</h2>
+      <p>Hello Admin,</p>
+      <p>The academic and business conference has been successfully created/updated and published live on the portal:</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Conference Title:</td><td style="padding: 10px; color: #0f172a; font-weight: 600;">${confTitle}</td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Event Schedule:</td><td style="padding: 10px; color: #0f172a;">${eventDate} | ${eventTime}</td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Physical Venue:</td><td style="padding: 10px; color: #0f172a;">${venue}</td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Virtual Stream Link:</td><td style="padding: 10px; color: #2563eb;"><a href="${streamLink}">${streamLink}</a></td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Status:</td><td style="padding: 10px; color: #059669; font-weight: bold;">${status}</td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Ticket Pricing:</td><td style="padding: 10px; color: #0f172a;">Onsite: PKR ${onsitePrice} | Online HD Stream: PKR ${onlinePrice}</td></tr>
+        <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: bold; color: #475569;">Presenters:</td><td style="padding: 10px; color: #0f172a;">${presentingStudents}</td></tr>
+        <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Attending Investors:</td><td style="padding: 10px; color: #0f172a;">${attendingInvestors}</td></tr>
+      </table>
+      <div style="margin-top: 24px; text-align: center;">
+        <a href="http://localhost:5173/admin/conference" style="background: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Manage in Admin Dashboard</a>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendAdminWhatsApp(whatsappMessage, { type: 'conference_published', conferenceId: conference?.id, title: confTitle }),
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'conference_published', conferenceId: conference?.id })
+  ]);
+}
+
+/**
+ * Event 6: Admin Publishes Article to Main Portal
+ */
+async function notifyArticlePublished({ article, adminUser }) {
+  const studentName = article?.student_name || 'Student Author';
+  const articleTitle = article?.title || 'Research Paper';
+  const tier = article?.tier || 'Platinum';
+  const date = new Date().toLocaleDateString('en-GB');
+
+  const whatsappMessage = 
+`🌟 *ARTICLE PUBLISHED LIVE (KAPSO NOTIFICATION)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Author:* ${studentName}
+📄 *Title:* ${articleTitle}
+🏆 *Award Tier:* ${tier}
+📅 *Published Date:* ${date}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 *Status:*
+The research article has been officially verified and published live to the public showcase & gallery! Venture investors can now review and pledge funding.
+
+👉 *View in Public Gallery:* http://localhost:5173/gallery`;
+
+  const emailSubject = `🌟 Research Paper Published Live: "${articleTitle}" (${tier} Tier)`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <h2 style="color: #059669; margin-top: 0;">🌟 Research Article Published Live</h2>
+      <p>Hello Admin,</p>
+      <p>The research article has been verified and published live to the university conference portal:</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Author:</td><td style="padding: 8px; color: #0f172a;">${studentName}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Title:</td><td style="padding: 8px; color: #0f172a;">${articleTitle}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Tier:</td><td style="padding: 8px; color: #059669; font-weight: bold;">${tier}</td></tr>
+      </table>
+      <div style="margin-top: 24px; text-align: center;">
+        <a href="http://localhost:5173/gallery" style="background: #059669; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">View Public Gallery</a>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendAdminWhatsApp(whatsappMessage, { type: 'article_published', articleId: article?.id, studentName }),
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'article_published', articleId: article?.id })
+  ]);
+}
+
 module.exports = {
   DEFAULT_ADMIN_WHATSAPP,
   DEFAULT_ADMIN_EMAIL,
@@ -397,5 +509,7 @@ module.exports = {
   notifyNewArticleSubmission,
   notifyArticleResubmitted,
   notifyPublicationFeePaid,
-  notifyPresentationFeePaid
+  notifyPresentationFeePaid,
+  notifyConferencePublished,
+  notifyArticlePublished
 };

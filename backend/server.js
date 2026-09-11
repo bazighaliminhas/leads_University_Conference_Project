@@ -12,7 +12,9 @@ const {
   notifyNewArticleSubmission,
   notifyArticleResubmitted,
   notifyPublicationFeePaid,
-  notifyPresentationFeePaid
+  notifyPresentationFeePaid,
+  notifyConferencePublished,
+  notifyArticlePublished
 } = require('./notificationService');
 
 const app = express();
@@ -855,6 +857,11 @@ app.put('/api/articles/:id/publish', authenticateToken, async (req, res) => {
     try {
       await db.query('UPDATE articles SET is_published = ?, status = ?, admin_unread = FALSE, student_unread = TRUE WHERE id = ?', [pubState ? 1 : 0, newStatus, articleId]);
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
+      
+      if (pubState && updatedRows[0]) {
+        notifyArticlePublished({ article: updatedRows[0], adminUser: req.user }).catch(err => console.error('Notification dispatch error:', err));
+      }
+
       return res.json({ message: `Article ${pubState ? 'verified & published to' : 'un-published from'} main site!`, article: updatedRows[0] });
     } catch (err) {
       return res.status(500).json({ message: 'Database error updating article publish status' });
@@ -868,6 +875,11 @@ app.put('/api/articles/:id/publish', authenticateToken, async (req, res) => {
     article.admin_unread = false;
     article.student_unread = true;
   }
+
+  if (pubState && article) {
+    notifyArticlePublished({ article, adminUser: req.user }).catch(err => console.error('Notification dispatch error:', err));
+  }
+
   res.json({ message: `Article ${pubState ? 'verified & published to' : 'un-published from'} main site!`, article });
 });
 
@@ -1023,6 +1035,90 @@ app.post('/api/admin/create-investor', authenticateToken, async (req, res) => {
   });
 });
 
+// Admin Route: Create New Conference
+app.post('/api/admin/conferences', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can create conferences' });
+  }
+
+  const {
+    title,
+    description,
+    cover_image,
+    event_date,
+    event_time,
+    venue,
+    stream_link,
+    presenting_students,
+    attending_investors,
+    status,
+    onsite_ticket_price,
+    online_ticket_price
+  } = req.body;
+
+  const confTitle = title || 'Annual Innovation & Research Conference';
+  const confDesc = description || 'Academic research conference & venture pitch summit';
+  const confCover = cover_image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80';
+  const confDate = event_date || '2026-10-15';
+  const confTime = event_time || '10:00 AM - 04:00 PM';
+  const confVenue = venue || 'University Main Auditorium';
+  const confStream = stream_link || 'https://meet.google.com/xyz-conference-stream';
+  const confPresenters = presenting_students || '';
+  const confInvestors = attending_investors || '';
+  const confStatus = status || 'Upcoming';
+  const confOnsitePrice = onsite_ticket_price !== undefined ? onsite_ticket_price : 500.00;
+  const confOnlinePrice = online_ticket_price !== undefined ? online_ticket_price : 200.00;
+
+  if (isDbConnected) {
+    try {
+      const [result] = await db.query(
+        'INSERT INTO conferences (title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [confTitle, confDesc, confCover, confDate, confTime, confVenue, confStream, confPresenters, confInvestors, confStatus, confOnsitePrice, confOnlinePrice]
+      );
+
+      const [newConfRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [result.insertId]);
+      const createdConf = newConfRows[0] || { id: result.insertId, title: confTitle, event_date: confDate, venue: confVenue };
+
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyConferencePublished({ conference: createdConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
+
+      return res.status(201).json({ message: 'New conference created and published live!', conference: createdConf });
+    } catch (err) {
+      console.error('MySQL Admin Create Conference Error:', err);
+    }
+  }
+
+  const newConf = {
+    id: mockConferences.length + 1,
+    title: confTitle,
+    description: confDesc,
+    cover_image: confCover,
+    event_date: confDate,
+    event_time: confTime,
+    venue: confVenue,
+    stream_link: confStream,
+    presenting_students: confPresenters,
+    attending_investors: confInvestors,
+    status: confStatus,
+    onsite_ticket_price: confOnsitePrice,
+    online_ticket_price: confOnlinePrice
+  };
+
+  mockConferences.unshift(newConf);
+
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyConferencePublished({ conference: newConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
+
+  res.status(201).json({ message: 'New conference created and published live!', conference: newConf });
+});
+
+// Fallback direct POST route
+app.post('/api/conferences', authenticateToken, async (req, res) => {
+  // Delegate to same handler
+  req.url = '/api/admin/conferences';
+  app._router.handle(req, res);
+});
+
 // Admin Route: Edit Conference Schedule, Cover Image, Presenting Students & Attending Investors
 app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
@@ -1057,7 +1153,12 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
       );
 
       const [updatedRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
-      return res.json({ message: 'Conference details published to main site!', conference: updatedRows[0] });
+      const savedConf = updatedRows[0];
+
+      // Dispatch WhatsApp & Email notification to Admin via Kapso
+      notifyConferencePublished({ conference: savedConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
+
+      return res.json({ message: 'Conference details published to main site!', conference: savedConf });
     } catch (err) {
       console.error('MySQL Admin Edit Conference Error:', err);
       // If columns missing, fallback gracefully
@@ -1067,7 +1168,11 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
           [title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, confId]
         );
         const [updatedRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
-        return res.json({ message: 'Conference details published to main site!', conference: updatedRows[0] });
+        const savedConf = updatedRows[0];
+
+        notifyConferencePublished({ conference: savedConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
+
+        return res.json({ message: 'Conference details published to main site!', conference: savedConf });
       } catch (fallbackErr) {
         return res.status(500).json({ message: 'Database error updating conference' });
       }
@@ -1090,7 +1195,16 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   if (onsite_ticket_price !== undefined) conf.onsite_ticket_price = onsite_ticket_price;
   if (online_ticket_price !== undefined) conf.online_ticket_price = online_ticket_price;
 
+  // Dispatch WhatsApp & Email notification to Admin via Kapso
+  notifyConferencePublished({ conference: conf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
+
   res.json({ message: 'Conference details published to main site!', conference: conf });
+});
+
+// Fallback PUT /api/conferences/:id route
+app.put('/api/conferences/:id', authenticateToken, async (req, res) => {
+  req.url = `/api/admin/conferences/${req.params.id}`;
+  app._router.handle(req, res);
 });
 
 // ================= INVESTOR REVIEW ENDPOINTS =================

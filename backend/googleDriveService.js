@@ -1,4 +1,11 @@
-const { google } = require('googleapis');
+let googleModule = null;
+function getGoogle() {
+  if (!googleModule) {
+    const { google } = require('googleapis');
+    googleModule = google;
+  }
+  return googleModule;
+}
 const path = require('path');
 const fs = require('fs');
 const stream = require('stream');
@@ -86,8 +93,9 @@ function getStorageConfigSummary() {
 function createClientForConfig(folderId, credentials) {
   if (!folderId) throw new Error('Google Drive Folder ID is required.');
   if (!credentials?.client_email || !credentials?.private_key) throw new Error('Valid Google service-account JSON is required.');
-  const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] });
-  return google.drive({ version: 'v3', auth });
+  const g = getGoogle();
+  const auth = new g.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] });
+  return g.drive({ version: 'v3', auth });
 }
 
 function getDriveClient() {

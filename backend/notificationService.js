@@ -1,14 +1,17 @@
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 let twilioClient = null;
-
-try {
-  const twilio = require('twilio');
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+function getTwilioClient() {
+  if (twilioClient) return twilioClient;
+  try {
+    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+      const twilio = require('twilio');
+      twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    }
+  } catch (e) {
+    // Twilio optional
   }
-} catch (e) {
-  // Twilio optional
+  return twilioClient;
 }
 
 // In-Memory Notification Audit Log (Accessible by Admin Dashboard)
@@ -18,10 +21,10 @@ const DEFAULT_ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP_NUMBER || '+9234827276
 const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
 
 /**
- * Sends WhatsApp message to Admin using Kapso (with Twilio fallback & graceful logging)
+ * Sends WhatsApp message (to custom recipient or Admin default) using Kapso / Twilio
  */
-async function sendAdminWhatsApp(messageText, metadata = {}) {
-  const rawTarget = DEFAULT_ADMIN_WHATSAPP;
+async function sendWhatsAppDirect(recipientPhone, messageText, metadata = {}) {
+  const rawTarget = recipientPhone || DEFAULT_ADMIN_WHATSAPP;
   // Clean phone number: remove '+' and spaces for Kapso/standard international format
   const cleanPhone = rawTarget.replace(/[^0-9]/g, '');
   const formattedTwilioTo = rawTarget.startsWith('whatsapp:') ? rawTarget : `whatsapp:${rawTarget.startsWith('+') ? rawTarget : '+' + cleanPhone}`;
@@ -31,12 +34,12 @@ async function sendAdminWhatsApp(messageText, metadata = {}) {
   let providerUsed = 'kapso_emulator';
   let errorDetail = null;
 
-  // 1. Try Kapso WhatsApp Cloud API (Primary requested engine)
+  // 1. Try Kapso WhatsApp Cloud API
   const kapsoApiKey = process.env.KAPSO_API_KEY;
   const kapsoPhoneNumberId = process.env.KAPSO_PHONE_NUMBER_ID;
   const kapsoEndpoint = `https://api.kapso.ai/meta/whatsapp/v24.0/${kapsoPhoneNumberId}/messages`;
 
-  if (kapsoApiKey && kapsoPhoneNumberId) {
+  if (kapsoApiKey && kapsoPhoneNumberId && cleanPhone) {
     try {
       providerUsed = 'kapso';
       const payload = {
@@ -59,7 +62,7 @@ async function sendAdminWhatsApp(messageText, metadata = {}) {
     } catch (kapsoErr) {
       console.error('⚠️ [KAPSO WHATSAPP TEXT SEND FAILED]:', kapsoErr.response?.data || kapsoErr.message);
 
-      // If 24-hour customer window is closed, send template message
+      // Template fallback
       try {
         const templatePayload = {
           messaging_product: 'whatsapp',
@@ -82,35 +85,33 @@ async function sendAdminWhatsApp(messageText, metadata = {}) {
         status = 'delivered_kapso_template';
         console.log(`✅ [KAPSO WHATSAPP TEMPLATE DELIVERED] Status: ${tRes.status} to ${cleanPhone}`);
       } catch (tErr) {
-        console.error('⚠️ [KAPSO TEMPLATE FAILED TOO]:', tErr.response?.data || tErr.message);
         errorDetail = tErr.response?.data || tErr.message;
         status = 'failed_kapso_attempt';
       }
     }
   }
 
-  // 2. Twilio WhatsApp Fallback if Kapso didn't send & Twilio is configured
-  if (status !== 'delivered_kapso' && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
+  // 2. Twilio WhatsApp Fallback
+  const activeTwilio = getTwilioClient();
+  if (status !== 'delivered_kapso' && activeTwilio && process.env.TWILIO_WHATSAPP_NUMBER && cleanPhone) {
     try {
       providerUsed = 'twilio';
-      const twilioRes = await twilioClient.messages.create({
-        from: process.env.TWILIO_WHATSAPP_NUMBER, // e.g. 'whatsapp:+14155238886'
+      const twilioRes = await activeTwilio.messages.create({
+        from: process.env.TWILIO_WHATSAPP_NUMBER,
         to: formattedTwilioTo,
         body: messageText
       });
       status = 'delivered_twilio';
       console.log(`✅ [TWILIO WHATSAPP DELIVERED] SID: ${twilioRes.sid} to ${formattedTwilioTo}`);
     } catch (twilioErr) {
-      console.error('⚠️ [TWILIO WHATSAPP ERROR]:', twilioErr.message);
       errorDetail = twilioErr.message;
       status = 'failed_twilio_attempt';
     }
   }
 
-  // High-visibility terminal output (Simulated live feed for terminal monitoring)
   console.log('\n' + '='.repeat(65));
   console.log(`📱 [WHATSAPP DISPATCH via ${providerUsed.toUpperCase()}]`);
-  console.log(`To Admin Phone: ${rawTarget}`);
+  console.log(`To: ${rawTarget}`);
   console.log(`Time: ${timestamp}`);
   console.log(`Status: ${status.toUpperCase()}`);
   console.log('-'.repeat(65));
@@ -131,21 +132,27 @@ async function sendAdminWhatsApp(messageText, metadata = {}) {
   };
 
   notificationHistory.unshift(logEntry);
-  // Keep only last 100 entries
   if (notificationHistory.length > 100) notificationHistory.pop();
 
   return logEntry;
 }
 
 /**
- * Sends Email to Admin using Nodemailer
+ * Sends WhatsApp message to Admin using Kapso (with Twilio fallback & graceful logging)
  */
-async function sendAdminEmail(subject, htmlBody, textBody, metadata = {}) {
-  const adminEmail = DEFAULT_ADMIN_EMAIL;
+async function sendAdminWhatsApp(messageText, metadata = {}) {
+  return sendWhatsAppDirect(DEFAULT_ADMIN_WHATSAPP, messageText, metadata);
+}
+
+/**
+ * Sends Email to custom recipient or Admin using Nodemailer
+ */
+async function sendEmailDirect(recipientEmail, subject, htmlBody, textBody, metadata = {}) {
+  const targetEmail = recipientEmail || DEFAULT_ADMIN_EMAIL;
   let status = 'logged_locally';
   let errorDetail = null;
 
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (process.env.SMTP_USER && process.env.SMTP_PASS && targetEmail) {
     try {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -158,28 +165,28 @@ async function sendAdminEmail(subject, htmlBody, textBody, metadata = {}) {
       });
 
       await transporter.sendMail({
-        from: `"Conference Portal" <${process.env.SMTP_USER}>`,
-        to: adminEmail,
+        from: `"Conference Portal - ORIC" <${process.env.SMTP_USER}>`,
+        to: targetEmail,
         subject: subject,
         text: textBody,
         html: htmlBody
       });
       status = 'delivered_email';
-      console.log(`✅ [EMAIL DELIVERED] Sent to ${adminEmail} | Subject: ${subject}`);
+      console.log(`✅ [EMAIL DELIVERED] Sent to ${targetEmail} | Subject: ${subject}`);
     } catch (err) {
       console.error('⚠️ [EMAIL ERROR]:', err.message);
       errorDetail = err.message;
       status = 'failed_email_attempt';
     }
   } else {
-    console.log(`📧 [EMAIL NOTIFICATION SIMULATED] To: ${adminEmail} | Subject: ${subject}`);
+    console.log(`📧 [EMAIL NOTIFICATION SIMULATED] To: ${targetEmail} | Subject: ${subject}`);
   }
 
   const logEntry = {
     id: 'email_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     channel: 'email',
     provider: 'nodemailer',
-    recipient: adminEmail,
+    recipient: targetEmail,
     title: subject,
     content: textBody,
     html: htmlBody,
@@ -193,6 +200,13 @@ async function sendAdminEmail(subject, htmlBody, textBody, metadata = {}) {
   if (notificationHistory.length > 100) notificationHistory.pop();
 
   return logEntry;
+}
+
+/**
+ * Sends Email to Admin using Nodemailer
+ */
+async function sendAdminEmail(subject, htmlBody, textBody, metadata = {}) {
+  return sendEmailDirect(DEFAULT_ADMIN_EMAIL, subject, htmlBody, textBody, metadata);
 }
 
 // -------------------------------------------------------------
@@ -643,51 +657,153 @@ The research article has been officially verified and published live to the publ
 }
 
 /**
- * Event 7: Attendee Books Conference Ticket Pass
+ * Event 7: Attendee Books Conference Ticket Pass (Pending Verification)
  */
-async function notifyTicketBooked({ ticket, conference, attendeeName, senderBank, transactionId, senderMobile }) {
-  const confTitle = conference?.title || 'Annual Research Summit 2026';
+async function notifyTicketBooked({ ticket, conference, attendeeName, attendeeEmail, senderBank, transactionId, senderMobile }) {
+  const confTitle = conference?.title || ticket?.conference_title || 'Annual Research Summit 2026';
   const name = attendeeName || ticket?.user_name || 'Conference Attendee';
+  const email = attendeeEmail || ticket?.user_email || 'student@leads.edu.pk';
+  const mobile = senderMobile || ticket?.sender_mobile || '0348-2727605';
   const passType = (ticket?.ticket_type || 'onsite').toUpperCase();
-  const amount = ticket?.amount_paid || 500;
-  const ticketCode = ticket?.ticket_code || 'PASS-LLU-2026';
+  const amount = ticket?.amount_paid || (passType.includes('ONSITE') ? 50 : 20);
+  const ticketCode = ticket?.ticket_code || `PASS-LLU-2026-${Date.now().toString().slice(-5)}`;
+  const bank = senderBank || ticket?.sender_bank || 'HBL Mobile App';
+  const trx = transactionId || ticket?.transaction_id || 'TRX-CONF-PASS';
   const date = new Date().toLocaleDateString('en-GB');
+  const time = new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
 
   const whatsappMessage = 
-`🎟️ *NEW CONFERENCE PASS BOOKED (KAPSO NOTIFICATION)*
+`🎟️ *NEW CONFERENCE PASS BOOKED — VERIFICATION REQUIRED*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 *Attendee:* ${name}
-🏛️ *Event:* ${confTitle}
-🎫 *Pass Type:* ${passType} Pass
-💰 *Amount:* PKR ${amount}
-🔢 *Ticket Code:* ${ticketCode}
-🏦 *Payment Via:* ${senderBank || 'HBL / Online Transfer'}
-💳 *Transaction ID:* ${transactionId || 'TRX-PAID'}
-📱 *Mobile:* ${senderMobile || 'N/A'}
-📅 *Booking Date:* ${date}
+👤 *Student / Delegate:* ${name}
+📧 *Email:* ${email}
+📱 *Mobile:* ${mobile}
+🏛️ *Conference:* ${confTitle}
+🎫 *Pass Category:* ${passType === 'ONSITE' ? '🏛️ Onsite Auditorium Pass' : '🎥 Virtual Live Stream Pass'}
+💰 *Fee Deposited:* PKR ${amount}
+🏦 *Payment Channel:* ${bank}
+🔢 *Transaction ID:* ${trx}
+🏷️ *Booking Ref Code:* ${ticketCode}
+📅 *Submitted At:* ${date} (${time})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚀 *Action:*
-Attendee has deposited pass fee & uploaded payment proof. E-Ticket Pass has been generated.`;
+🔍 *Action Required:*
+Please log in to Admin Portal (*/admin/tickets*) to verify the uploaded payment slip and allocate the *Seat Number* (for Onsite) or *Live Stream Link* (for Virtual).`;
 
-  const emailSubject = `🎟️ New Conference Ticket Pass Booked: ${name} (${passType} Pass)`;
+  const emailSubject = `🎟️ Conference Pass Booking Request: ${name} (${passType} Pass — PKR ${amount})`;
   const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-      <h2 style="color: #d97706; margin-top: 0;">🎟️ Conference Pass Booked</h2>
-      <p>Hello Admin,</p>
-      <p>A new delegate/student has booked a ticket pass for Lahore Leads University Conference:</p>
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Attendee:</td><td style="padding: 8px; color: #0f172a;">${name}</td></tr>
-        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Conference:</td><td style="padding: 8px; color: #0f172a;">${confTitle}</td></tr>
-        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Pass Type:</td><td style="padding: 8px; color: #d97706; font-weight: bold;">${passType}</td></tr>
-        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Amount:</td><td style="padding: 8px; color: #059669; font-weight: bold;">PKR ${amount}</td></tr>
-        <tr><td style="padding: 8px; font-weight: bold; color: #475569;">Ticket Code:</td><td style="padding: 8px; font-mono; font-weight: bold;">${ticketCode}</td></tr>
-      </table>
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 18px 24px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Conference Pass Registration</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #d97706; margin-top: 0; font-size: 18px;">🎟️ New Conference Pass Awaiting Payment Verification</h3>
+        <p style="color: #334155; font-size: 14px;">Hello Admin,</p>
+        <p style="color: #334155; font-size: 14px;">A student / delegate has submitted their conference pass booking fee proof. Please verify the transaction details below:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Delegate Name:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${name}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Email Address:</td><td style="padding: 10px; color: #0f172a;">${email}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Mobile Number:</td><td style="padding: 10px; color: #0f172a;">${mobile}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Conference:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${confTitle}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Pass Category:</td><td style="padding: 10px; color: #d97706; font-weight: bold;">${passType} Pass</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Amount Paid:</td><td style="padding: 10px; color: #059669; font-weight: bold; font-size: 15px;">PKR ${amount}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Bank / Method:</td><td style="padding: 10px; color: #0f172a;">${bank}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Transaction TID:</td><td style="padding: 10px; font-family: monospace; font-weight: bold; color: #0f172a;">${trx}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Booking Ref Code:</td><td style="padding: 10px; font-family: monospace; font-weight: bold; color: #0284c7;">${ticketCode}</td></tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/admin/tickets" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px; border: 1px solid #FBBF24;">
+            Inspect Slip & Allocate Seat / Stream Link in Admin Portal →
+          </a>
+        </div>
+      </div>
     </div>
   `;
 
   await Promise.allSettled([
-    sendAdminWhatsApp(whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name }),
-    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'ticket_booked', ticketCode })
+    sendAdminWhatsApp(whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name, passType, amount }),
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name })
+  ]);
+}
+
+/**
+ * Event 8: Admin Verifies Pass & Allocates Seat / Stream Link (Sent to Student & Logged)
+ */
+async function notifyTicketVerifiedAndIssued({ ticket, conference, attendeeName, attendeeEmail, attendeeMobile, seatNumber, streamLink, venue, eventDate, eventTime }) {
+  const confTitle = conference?.title || ticket?.conference_title || 'Annual Research Summit 2026';
+  const name = attendeeName || ticket?.user_name || 'Conference Delegate';
+  const email = attendeeEmail || ticket?.user_email || 'student@leads.edu.pk';
+  const mobile = attendeeMobile || ticket?.sender_mobile || DEFAULT_ADMIN_WHATSAPP;
+  const passType = (ticket?.ticket_type || 'onsite').toUpperCase();
+  const ticketCode = ticket?.ticket_code || 'PASS-LLU-2026';
+  const isOnsite = (ticket?.ticket_type || 'onsite').toLowerCase() === 'onsite';
+  const allocatedSeat = seatNumber || ticket?.seat_number || 'Auditorium Main Hall';
+  const liveLink = streamLink || ticket?.stream_link || 'https://meet.google.com/leads-conf-2026';
+  const dateStr = eventDate || conference?.event_date || '2026-09-15';
+  const timeStr = eventTime || conference?.event_time || '10:00 AM - 04:00 PM';
+  const venueStr = venue || conference?.venue || 'Lahore Leads University Main Campus Grand Auditorium';
+
+  const whatsappMessage = 
+`🎉 *OFFICIAL CONFERENCE PASS APPROVED & ISSUED*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛️ *Event:* ${confTitle}
+👤 *Delegate Name:* ${name}
+🎫 *Pass Category:* ${isOnsite ? '🏛️ Onsite Auditorium Delegate Pass' : '🎥 Virtual HD Live Stream Pass'}
+🔢 *Official Pass Code:* ${ticketCode}
+📅 *Event Date:* ${dateStr}
+⏰ *Event Timings:* ${timeStr}
+${isOnsite ? `💺 *Allocated Seat:* ${allocatedSeat}\n📍 *Venue:* ${venueStr}` : `🎥 *Live Stream Access Link:*\n${liveLink}`}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ *Verification Status:* Payment Verified & Seat/Link Allocated
+💡 *Access Note:* Please login to your Student Dashboard to view and print your entrance pass badge with QR code!`;
+
+  const emailSubject = `🎉 Official Conference Pass Verified & Issued: ${confTitle} (${ticketCode})`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Official Conference Entrance Pass</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">🎉 Your Conference Pass is Verified & Activated!</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${name}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">Congratulations! Your payment slip has been verified by the conference administration. Your pass and access details are ready:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Conference:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${confTitle}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Pass Category:</td><td style="padding: 10px; color: #d97706; font-weight: bold;">${passType} Pass</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">E-Pass Code:</td><td style="padding: 10px; font-family: monospace; font-weight: bold; color: #0284c7;">${ticketCode}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Event Date:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${dateStr}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Event Timings:</td><td style="padding: 10px; color: #0f172a;">${timeStr}</td></tr>
+          ${isOnsite ? `
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Allocated Seat:</td><td style="padding: 10px; color: #059669; font-weight: bold; font-size: 15px;">${allocatedSeat}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Venue:</td><td style="padding: 10px; color: #0f172a;">${venueStr}</td></tr>
+          ` : `
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Live Stream Access:</td><td style="padding: 10px; font-weight: bold;"><a href="${liveLink}" target="_blank" style="color: #2563eb; text-decoration: underline; word-break: break-all;">${liveLink}</a></td></tr>
+          `}
+        </table>
+
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 14px; border-radius: 10px; color: #065f46; font-size: 13px; margin: 16px 0;">
+          🎟️ <strong>Digital Entrance Badge:</strong> You can print your official delegate pass with QR code directly from your student portal.
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="http://localhost:5173/student" style="background: #059669; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal to View & Print Pass →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Dispatch to Student and also notify admin audit log
+  await Promise.allSettled([
+    sendWhatsAppDirect(mobile, whatsappMessage, { type: 'ticket_verified', ticketCode, attendeeName: name, seatNumber: allocatedSeat, streamLink: liveLink }),
+    sendEmailDirect(email, emailSubject, emailHtml, whatsappMessage, { type: 'ticket_verified', ticketCode, attendeeName: name })
   ]);
 }
 
@@ -736,7 +852,9 @@ module.exports = {
   DEFAULT_ADMIN_WHATSAPP,
   DEFAULT_ADMIN_EMAIL,
   notificationHistory,
+  sendWhatsAppDirect,
   sendAdminWhatsApp,
+  sendEmailDirect,
   sendAdminEmail,
   notifyNewArticleSubmission,
   notifyArticleResubmitted,
@@ -745,5 +863,6 @@ module.exports = {
   notifyConferencePublished,
   notifyArticlePublished,
   notifyTicketBooked,
+  notifyTicketVerifiedAndIssued,
   notifyReaderAccessRequested
 };

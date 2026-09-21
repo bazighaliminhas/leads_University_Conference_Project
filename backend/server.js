@@ -20,6 +20,7 @@ const {
   notifyConferencePublished,
   notifyArticlePublished,
   notifyTicketBooked,
+  notifyTicketVerifiedAndIssued,
   notifyReaderAccessRequested
 } = require('./notificationService');
 
@@ -335,9 +336,14 @@ async function initDatabase() {
     await ensureColumn('conferences', 'event_time', "VARCHAR(100) DEFAULT '10:00 AM - 04:00 PM'");
     await ensureColumn('conferences', 'cover_image', 'TEXT');
     await ensureColumn('conferences', 'presenting_students', 'TEXT');
-    await ensureColumn('conferences', 'attending_investors', 'TEXT');
     await ensureColumn('tickets', 'user_name', "VARCHAR(255) DEFAULT ''");
+    await ensureColumn('tickets', 'user_email', "VARCHAR(255) DEFAULT ''");
     await ensureColumn('tickets', 'seat_number', "VARCHAR(100) DEFAULT 'Seat Row A - #01'");
+    await ensureColumn('tickets', 'stream_link', "VARCHAR(500) DEFAULT ''");
+    await ensureColumn('tickets', 'receipt_url', "LONGTEXT");
+    await ensureColumn('tickets', 'sender_bank', "VARCHAR(100) DEFAULT 'HBL Mobile App'");
+    await ensureColumn('tickets', 'transaction_id', "VARCHAR(100) DEFAULT ''");
+    await ensureColumn('tickets', 'sender_mobile', "VARCHAR(50) DEFAULT ''");
     await ensureColumn('tickets', 'event_date', 'VARCHAR(100)');
     await ensureColumn('tickets', 'event_time', 'VARCHAR(100)');
     await ensureColumn('tickets', 'venue', 'VARCHAR(255)');
@@ -2534,13 +2540,13 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
   }
 
   const ticketId = req.params.id;
-  const { seat_number, stream_link, venue } = req.body;
+  const { seat_number, stream_link, venue, event_date, event_time } = req.body;
 
   if (isDbConnected) {
     try {
       await db.query(
-        'UPDATE tickets SET payment_status = "Verified & Issued", seat_number = COALESCE(?, seat_number), venue = COALESCE(?, venue) WHERE id = ?',
-        [seat_number, venue, ticketId]
+        'UPDATE tickets SET payment_status = "Verified & Issued", seat_number = COALESCE(?, seat_number), stream_link = COALESCE(?, stream_link), venue = COALESCE(?, venue), event_date = COALESCE(?, event_date), event_time = COALESCE(?, event_time) WHERE id = ?',
+        [seat_number, stream_link, venue, event_date, event_time, ticketId]
       );
       const [rows] = await db.query('SELECT * FROM tickets WHERE id = ?', [ticketId]);
       const verifiedTicket = rows[0];
@@ -2561,13 +2567,34 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
           console.warn('Auto reader grant notice:', rErr.message);
         }
 
+        // Fetch conference object for details
+        let confObj = null;
+        try {
+          const [confs] = await db.query('SELECT * FROM conferences WHERE id = ?', [verifiedTicket.conference_id]);
+          if (confs.length > 0) confObj = confs[0];
+        } catch (_) {}
+
+        // Send Student WhatsApp and Email Confirmation
+        notifyTicketVerifiedAndIssued({
+          ticket: verifiedTicket,
+          conference: confObj,
+          attendeeName: verifiedTicket.user_name,
+          attendeeEmail: verifiedTicket.user_email,
+          attendeeMobile: verifiedTicket.sender_mobile,
+          seatNumber: seat_number || verifiedTicket.seat_number,
+          streamLink: stream_link || verifiedTicket.stream_link,
+          venue: venue || verifiedTicket.venue,
+          eventDate: event_date || verifiedTicket.event_date,
+          eventTime: event_time || verifiedTicket.event_time
+        }).catch(err => console.error('Error dispatching ticket verified notification:', err));
+
         // Notify Delegate in Portal
         createPortalNotification({
           userId: verifiedTicket.user_id,
           type: 'ticket',
-          title: '🎟️ Conference Pass Verified & Research Reading Unlocked!',
-          message: `Your pass for “${verifiedTicket.conference_title || 'Conference'}” has been verified! Allocated: ${seat_number || verifiedTicket.seat_number}. Research article reading access is now unlocked for you!`,
-          link: '/student/passes'
+          title: '🎟️ Conference Pass Verified & Activated!',
+          message: `Your pass for “${verifiedTicket.conference_title || confObj?.title || 'Conference'}” is verified! ${verifiedTicket.ticket_type === 'onsite' ? `Seat: ${seat_number || verifiedTicket.seat_number}` : `Stream Link: ${stream_link || verifiedTicket.stream_link || 'Live Virtual Access'}`}.`,
+          link: '/student'
         });
       }
 
@@ -2583,13 +2610,28 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
   if (seat_number) ticket.seat_number = seat_number;
   if (venue) ticket.venue = venue;
   if (stream_link) ticket.stream_link = stream_link;
+  if (event_date) ticket.event_date = event_date;
+  if (event_time) ticket.event_time = event_time;
+
+  notifyTicketVerifiedAndIssued({
+    ticket,
+    conference: { title: ticket.conference_title, venue: ticket.venue, event_date: ticket.event_date, event_time: ticket.event_time },
+    attendeeName: ticket.user_name,
+    attendeeEmail: ticket.user_email,
+    attendeeMobile: ticket.sender_mobile,
+    seatNumber: ticket.seat_number,
+    streamLink: ticket.stream_link,
+    venue: ticket.venue,
+    eventDate: ticket.event_date,
+    eventTime: ticket.event_time
+  }).catch(err => console.error('Error dispatching mock ticket verified notification:', err));
 
   createPortalNotification({
     userId: ticket.user_id,
     type: 'ticket',
-    title: '🎟️ Conference Pass Verified & Research Reading Unlocked!',
-    message: `Your pass for “${ticket.conference_title || 'Conference'}” has been verified! Allocated: ${seat_number || ticket.seat_number}. Research article reading access is now unlocked for you!`,
-    link: '/student/passes'
+    title: '🎟️ Conference Pass Verified & Activated!',
+    message: `Your pass for “${ticket.conference_title || 'Conference'}” is verified! ${ticket.ticket_type === 'onsite' ? `Seat: ${ticket.seat_number}` : `Stream Link: ${ticket.stream_link || 'Live Virtual Access'}`}.`,
+    link: '/student'
   });
 
   res.json({ message: 'Ticket pass verified and issued to delegate!', ticket });

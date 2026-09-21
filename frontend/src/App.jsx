@@ -783,6 +783,7 @@ export function App() {
                 articles={articles}
                 journals={journals}
                 conferences={conferences}
+                tickets={tickets}
                 onArticleSubmit={handleArticleSubmit}
                 onReviseArticle={handleReviseArticle}
                 onPayPublicationFee={handlePayPublicationFee}
@@ -800,6 +801,7 @@ export function App() {
                 articles={articles}
                 journals={journals}
                 conferences={conferences}
+                tickets={tickets}
                 onArticleSubmit={handleArticleSubmit}
                 onReviseArticle={handleReviseArticle}
                 onPayPublicationFee={handlePayPublicationFee}
@@ -817,6 +819,7 @@ export function App() {
                 articles={articles}
                 journals={journals}
                 conferences={conferences}
+                tickets={tickets}
                 onArticleSubmit={handleArticleSubmit}
                 onReviseArticle={handleReviseArticle}
                 onPayPublicationFee={handlePayPublicationFee}

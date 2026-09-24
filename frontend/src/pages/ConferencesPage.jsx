@@ -279,21 +279,43 @@ export function ConferencesPage({ user, onOpenAuth }) {
                 </div>
 
                 {/* Bottom Action Row */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setSelectedConfModal(conf)}
-                    className="text-xs font-bold text-[#0F2C59] hover:text-amber-700 transition"
-                  >
-                    View Details
-                  </button>
+                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedConfModal(conf)}
+                      className="text-xs font-bold text-[#0F2C59] hover:text-amber-700 transition"
+                    >
+                      View Details
+                    </button>
+                    {conf.stream_link && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200"
+                        title="Virtual stream available for pass holders"
+                      >
+                        <Video className="w-3 h-3 text-blue-600" />
+                        <span>HD Stream Available</span>
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    onClick={() => handleBookTicket(conf)}
-                    className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-sm flex items-center gap-1.5"
-                  >
-                    <Ticket className="w-3.5 h-3.5" />
-                    <span>Book Pass</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={conf.calendar_html_link || `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(conf.title)}&dates=20261015T050000Z/20261015T110000Z&details=${encodeURIComponent('Lahore Leads University Conference\nAuditorium & Virtual Stream Access')}&location=${encodeURIComponent(conf.venue || 'Lahore Leads University')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
+                      title="Add to Google Calendar"
+                    >
+                      <Calendar className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => handleBookTicket(conf)}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                    >
+                      <Ticket className="w-3.5 h-3.5" />
+                      <span>Book Pass</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -333,6 +355,12 @@ export function ConferencesPage({ user, onOpenAuth }) {
                 <MapPin className="w-4 h-4 text-amber-700" />
                 <span><strong className="text-[#0A192F]">Venue:</strong> {selectedConfModal.venue}</span>
               </div>
+              {selectedConfModal.stream_link && (
+                <div className="flex items-center gap-2 text-slate-700 sm:col-span-2 bg-blue-50/60 p-2.5 rounded-xl border border-blue-200/60 text-xs">
+                  <Video className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <span><strong>Virtual Live Stream:</strong> Secure Google Meet link & QR access pass delivered to your portal & Gmail upon pass verification.</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -351,19 +379,32 @@ export function ConferencesPage({ user, onOpenAuth }) {
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setSelectedConfModal(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition"
-              >
-                Close
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedConfModal.calendar_html_link || `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(selectedConfModal.title)}&dates=20261015T050000Z/20261015T110000Z&details=${encodeURIComponent('Lahore Leads University Conference\nVirtual Meet: ' + (selectedConfModal.stream_link || ''))}&location=${encodeURIComponent(selectedConfModal.venue || 'Lahore Leads University')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3.5 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 border border-blue-200 transition flex items-center gap-1.5"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Add to Google Calendar</span>
+                </a>
+                <button
+                  onClick={() => setSelectedConfModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition"
+                >
+                  Close
+                </button>
+              </div>
+
               <button
                 onClick={() => {
+                  const target = selectedConfModal;
                   setSelectedConfModal(null);
-                  handleBookTicket(selectedConfModal);
+                  handleBookTicket(target);
                 }}
-                className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold flex items-center gap-2 shadow transition"
+                className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-2 shadow transition"
               >
                 <Ticket className="w-4 h-4" />
                 <span>Book Ticket Pass</span>

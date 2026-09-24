@@ -1,5 +1,6 @@
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const { buildGoogleCalendarWebUrl } = require('./googleCalendarService');
 let twilioClient = null;
 function getTwilioClient() {
   if (twilioClient) return twilioClient;
@@ -315,9 +316,36 @@ Please review the paper abstract, evaluate plagiarism score, and allocate an aca
     </div>
   `;
 
+  const studentAckSubject = `📄 Manuscript Received: "${articleTitle}" — Lahore Leads University ORIC`;
+  const studentAckHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">✅ Research Manuscript Received Successfully</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">Thank you for submitting your research manuscript <strong>"${articleTitle}"</strong> to the Lahore Leads University ORIC Directorate.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Category:</td><td style="padding: 10px; color: #0f172a;">${category}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Submission Fee TID:</td><td style="padding: 10px; color: #0f172a; font-family: monospace; font-weight: bold;">${tid}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Status:</td><td style="padding: 10px; color: #2563eb; font-weight: bold;">Under Peer Review</td></tr>
+        </table>
+        <p style="color: #475569; font-size: 13px;">Our Editorial Board will review your manuscript. You will receive real-time email notifications whenever reviewer notes, scores, or award tiers are updated.</p>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
   await Promise.allSettled([
     sendAdminWhatsApp(whatsappMessage, { type: 'submission', articleId: article?.id, studentName }),
-    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'submission', articleId: article?.id })
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'submission', articleId: article?.id }),
+    studentEmail ? sendEmailDirect(studentEmail, studentAckSubject, studentAckHtml, `Manuscript received: ${articleTitle}`, { type: 'student_submission_ack', articleId: article?.id }) : Promise.resolve()
   ]);
 }
 
@@ -326,7 +354,7 @@ Please review the paper abstract, evaluate plagiarism score, and allocate an aca
  */
 async function notifyArticleResubmitted({ student, article }) {
   const studentName = student?.full_name || article?.student_name || 'Student Author';
-  const studentEmail = student?.email || 'student@univ.edu';
+  const studentEmail = student?.email || article?.user_email || 'bazighminhas1@gmail.com';
   const articleTitle = article?.title || 'Research Paper';
   const date = new Date().toLocaleDateString('en-GB');
 
@@ -345,17 +373,52 @@ Please re-evaluate the full text and proceed to tier classification.
 
   const emailSubject = `🔄 Revised Paper Resubmitted: "${articleTitle}" by ${studentName}`;
   const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
-      <h2 style="color: #0284c7; margin-top: 0;">🔄 Revised Article Resubmitted</h2>
-      <p>Student <strong>${studentName}</strong> has revised their paper according to your previous feedback:</p>
-      <p><strong>Title:</strong> ${articleTitle}</p>
-      <p><a href="http://localhost:5173/admin/articles" style="background: #0284c7; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block;">Review Updated Paper</a></p>
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Revised Manuscript Inflow</p>
+      </div>
+      <div style="padding: 20px 0;">
+        <h3 style="color: #0284c7; margin-top: 0; font-size: 18px;">🔄 Corrected Manuscript Resubmitted</h3>
+        <p style="color: #334155; font-size: 14px;">Student researcher <strong>${studentName}</strong> has uploaded a revised draft for peer review re-evaluation:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Article Title:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${articleTitle}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Author Email:</td><td style="padding: 10px; color: #0284c7;">${studentEmail}</td></tr>
+        </table>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/admin/articles" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Review Updated Paper in Admin Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const studentAckSubject = `🔄 Revised Manuscript Received: "${articleTitle}" — Lahore Leads University ORIC`;
+  const studentAckHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">✅ Corrected Manuscript Received</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">Your revised research paper <strong>"${articleTitle}"</strong> has been successfully received by the Editorial Review Board.</p>
+        <p style="color: #475569; font-size: 13px;">Our academic reviewers are re-evaluating your corrections against the previous editorial notes. You will receive an instant email update once the grading is finalized.</p>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal →
+          </a>
+        </div>
+      </div>
     </div>
   `;
 
   await Promise.allSettled([
     sendAdminWhatsApp(whatsappMessage, { type: 'revision', articleId: article?.id, studentName }),
-    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'revision', articleId: article?.id })
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'revision', articleId: article?.id }),
+    studentEmail ? sendEmailDirect(studentEmail, studentAckSubject, studentAckHtml, `Revised manuscript received: ${articleTitle}`, { type: 'student_resubmission_ack', articleId: article?.id }) : Promise.resolve()
   ]);
 }
 
@@ -614,8 +677,9 @@ The conference schedule, ticket availability, presenting lineup, and attending i
 /**
  * Event 6: Admin Publishes Article to Main Portal
  */
-async function notifyArticlePublished({ article, adminUser }) {
-  const studentName = article?.student_name || 'Student Author';
+async function notifyArticlePublished({ article, student, adminUser }) {
+  const studentName = student?.full_name || article?.student_name || 'Student Author';
+  const studentEmail = student?.email || article?.user_email || article?.student_email;
   const articleTitle = article?.title || 'Research Paper';
   const tier = article?.tier || 'Platinum';
   const date = new Date().toLocaleDateString('en-GB');
@@ -650,9 +714,35 @@ The research article has been officially verified and published live to the publ
     </div>
   `;
 
+  const studentPubSubject = `🌟 Congratulations! Your Research Paper is Published Live — Lahore Leads University`;
+  const studentPubHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">🌟 Congratulations! Your Paper is Officially Published</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">We are delighted to inform you that your manuscript <strong>"${articleTitle}"</strong> has been approved and published live to the official University Research Showcase.</p>
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 14px; border-radius: 10px; margin: 16px 0; text-align: center;">
+          <span style="font-size: 12px; color: #065f46; font-weight: bold; text-transform: uppercase;">Awarded Tier</span>
+          <h2 style="color: #047857; margin: 4px 0; font-size: 24px;">🏆 ${tier} Tier</h2>
+          <p style="color: #065f46; font-size: 12px; margin: 0;">Your paper is now accessible to global academic readers and venture capital investors.</p>
+        </div>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/gallery" style="background: #059669; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            View Live in Public Showcase →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
   await Promise.allSettled([
     sendAdminWhatsApp(whatsappMessage, { type: 'article_published', articleId: article?.id, studentName }),
-    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'article_published', articleId: article?.id })
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'article_published', articleId: article?.id }),
+    studentEmail ? sendEmailDirect(studentEmail, studentPubSubject, studentPubHtml, `Your paper ${articleTitle} is published!`, { type: 'student_article_published', articleId: article?.id }) : Promise.resolve()
   ]);
 }
 
@@ -723,9 +813,37 @@ Please log in to Admin Portal (*/admin/tickets*) to verify the uploaded payment 
     </div>
   `;
 
+  const studentTicketSubject = `🎟️ Conference Pass Booking Received: ${confTitle} (${ticketCode})`;
+  const studentTicketHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Conference Pass Registration</p>
+      </div>
+      <div style="padding: 20px 0;">
+        <h3 style="color: #d97706; margin-top: 0; font-size: 18px;">🎟️ Pass Booking Received — Pending Admin Verification</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${name}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">We have received your conference pass booking request for <strong>${confTitle}</strong>. Your payment proof is currently under review by Admin.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Pass Type:</td><td style="padding: 10px; color: #d97706; font-weight: bold;">${passType} Pass</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Amount Deposited:</td><td style="padding: 10px; color: #059669; font-weight: bold;">PKR ${amount}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Booking Ref Code:</td><td style="padding: 10px; color: #0284c7; font-family: monospace; font-weight: bold;">${ticketCode}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Transaction TID:</td><td style="padding: 10px; color: #0f172a; font-family: monospace;">${trx}</td></tr>
+        </table>
+        <p style="color: #475569; font-size: 13px;">Once Admin verifies your fee challan, your seat allocation (or Google Meet virtual room link) and 1-click Google Calendar pass will be issued immediately to this email.</p>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            View Pass in Student Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
   await Promise.allSettled([
     sendAdminWhatsApp(whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name, passType, amount }),
-    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name })
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'ticket_booked', ticketCode, attendeeName: name }),
+    email ? sendEmailDirect(email, studentTicketSubject, studentTicketHtml, `Pass booking received for ${confTitle}`, { type: 'student_ticket_booked_ack', ticketCode }) : Promise.resolve()
   ]);
 }
 
@@ -746,6 +864,15 @@ async function notifyTicketVerifiedAndIssued({ ticket, conference, attendeeName,
   const timeStr = eventTime || conference?.event_time || '10:00 AM - 04:00 PM';
   const venueStr = venue || conference?.venue || 'Lahore Leads University Main Campus Grand Auditorium';
 
+  const calAddUrl = buildGoogleCalendarWebUrl({
+    title: confTitle,
+    description: `Official Pass Code: ${ticketCode}\nSeat/Access: ${isOnsite ? allocatedSeat : liveLink}\nVenue: ${venueStr}`,
+    eventDate: dateStr,
+    eventTime: timeStr,
+    venue: venueStr,
+    meetUrl: liveLink
+  });
+
   const whatsappMessage = 
 `🎉 *OFFICIAL CONFERENCE PASS APPROVED & ISSUED*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -755,10 +882,13 @@ async function notifyTicketVerifiedAndIssued({ ticket, conference, attendeeName,
 🔢 *Official Pass Code:* ${ticketCode}
 📅 *Event Date:* ${dateStr}
 ⏰ *Event Timings:* ${timeStr}
-${isOnsite ? `💺 *Allocated Seat:* ${allocatedSeat}\n📍 *Venue:* ${venueStr}` : `🎥 *Live Stream Access Link:*\n${liveLink}`}
+${isOnsite ? `💺 *Allocated Seat:* ${allocatedSeat}\n📍 *Venue:* ${venueStr}` : `🎥 *Google Meet Virtual Room:*\n${liveLink}`}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ *Verification Status:* Payment Verified & Seat/Link Allocated
-💡 *Access Note:* Please login to your Student Dashboard to view and print your entrance pass badge with QR code!`;
+📅 *1-Click Google Calendar Save:*
+${calAddUrl}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ *Verification Status:* Payment Verified & Pass Issued
+💡 *Access Note:* Please login to your Student Dashboard to view your pass badge and launch the Google Meet session.`;
 
   const emailSubject = `🎉 Official Conference Pass Verified & Issued: ${confTitle} (${ticketCode})`;
   const emailHtml = `
@@ -783,17 +913,23 @@ ${isOnsite ? `💺 *Allocated Seat:* ${allocatedSeat}\n📍 *Venue:* ${venueStr}
           <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Allocated Seat:</td><td style="padding: 10px; color: #059669; font-weight: bold; font-size: 15px;">${allocatedSeat}</td></tr>
           <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Venue:</td><td style="padding: 10px; color: #0f172a;">${venueStr}</td></tr>
           ` : `
-          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Live Stream Access:</td><td style="padding: 10px; font-weight: bold;"><a href="${liveLink}" target="_blank" style="color: #2563eb; text-decoration: underline; word-break: break-all;">${liveLink}</a></td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Google Meet Live Stream:</td><td style="padding: 10px; font-weight: bold;"><a href="${liveLink}" target="_blank" style="color: #2563eb; text-decoration: underline; word-break: break-all;">${liveLink}</a></td></tr>
           `}
         </table>
 
-        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 14px; border-radius: 10px; color: #065f46; font-size: 13px; margin: 16px 0;">
-          🎟️ <strong>Digital Entrance Badge:</strong> You can print your official delegate pass with QR code directly from your student portal.
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${calAddUrl}" target="_blank" style="background: #2563eb; color: #ffffff; padding: 11px 22px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 13px;">
+            📅 Add to Google Calendar (1-Click)
+          </a>
         </div>
 
-        <div style="text-align: center; margin-top: 20px;">
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 14px; border-radius: 10px; color: #065f46; font-size: 13px; margin: 16px 0;">
+          🎟️ <strong>Digital Entrance Badge:</strong> You can view and print your official delegate pass directly from your student portal.
+        </div>
+
+        <div style="text-align: center; margin-top: 15px;">
           <a href="http://localhost:5173/student" style="background: #059669; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
-            Open Student Portal to View & Print Pass →
+            Open Student Portal to View Pass →
           </a>
         </div>
       </div>
@@ -848,6 +984,351 @@ async function notifyReaderAccessRequested(data) {
   ]);
 }
 
+async function notifyConferenceDayReminder({ conference, adminPhone, adminEmail }) {
+  const confTitle = conference?.title || 'Lahore Leads University Academic Conference';
+  const eventDate = conference?.event_date || new Date().toISOString().split('T')[0];
+  const eventTime = conference?.event_time || '10:00 AM - 04:00 PM';
+  const venue = conference?.venue || 'University Main Auditorium & Virtual Stream';
+  const meetUrl = conference?.stream_link || 'https://meet.google.com';
+  const presentingStudents = conference?.presenting_students || 'Selected Research Scholars';
+  const attendingInvestors = conference?.attending_investors || 'Registered Industry & Venture Partners';
+
+  const whatsappMessage =
+`🔔 *TODAY'S CONFERENCE REMINDER — LAHORE LEADS UNIVERSITY*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏛️ *Conference:* ${confTitle}
+📅 *Event Date:* Today (${eventDate})
+⏰ *Timings:* ${eventTime}
+📍 *Venue:* ${venue}
+🎥 *Official Google Meet Link:*
+${meetUrl}
+
+👥 *Presenting Scholars:*
+${presentingStudents}
+
+💼 *Attending Investors / Guests:*
+${attendingInvestors}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *Admin Note:* All delegate passes and Google Meet credentials have been synced. Please launch the conference room 15 minutes before start time.`;
+
+  const emailSubject = `🔔 [TODAY'S CONFERENCE] ${confTitle} (${eventTime})`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #b45309; margin-top: 0; font-size: 18px;">🔔 Conference Scheduled for Today!</h3>
+        <p style="color: #334155; font-size: 14px;">Hello Admin,</p>
+        <p style="color: #334155; font-size: 14px;">This is an automated institutional reminder that the following academic conference is scheduled for <strong>today</strong>:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Conference:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${confTitle}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Date & Timings:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${eventDate} (${eventTime})</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Venue / Hall:</td><td style="padding: 10px; color: #0f172a;">${venue}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Google Meet URL:</td><td style="padding: 10px; color: #2563eb; font-weight: bold;"><a href="${meetUrl}" target="_blank" style="color: #2563eb; text-decoration: underline;">${meetUrl}</a></td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Presenters:</td><td style="padding: 10px; color: #0f172a; font-size: 13px;">${presentingStudents}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Investors:</td><td style="padding: 10px; color: #0f172a; font-size: 13px;">${attendingInvestors}</td></tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="${meetUrl}" target="_blank" style="background: #2563eb; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px; margin-right: 10px;">
+            🎥 Open Google Meet Room →
+          </a>
+          <a href="http://localhost:5173/admin/conferences" style="background: #0A192F; color: #FBBF24; padding: 12px 24px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Admin Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendAdminWhatsApp(whatsappMessage, { type: 'conference_day_reminder', conferenceId: conference?.id, conferenceTitle: confTitle }),
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'conference_day_reminder', conferenceId: conference?.id })
+  ]);
+}
+
+async function notifyStudentRevisionRequested({ student, article, revisionNotes, reviewerNotes, plagiarismScore }) {
+  const studentName = student?.full_name || article?.student_name || 'Student Researcher';
+  const studentEmail = student?.email || article?.user_email || 'student@leads.edu.pk';
+  const articleTitle = article?.title || 'Academic Manuscript';
+  const notes = revisionNotes || reviewerNotes || 'Please correct the identified remarks and resubmit.';
+  const plag = plagiarismScore !== undefined ? plagiarismScore : (article?.plagiarism_score || 5);
+
+  const whatsappMessage =
+`⚠️ *ORIC EDITORIAL FEEDBACK ON YOUR MANUSCRIPT*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dear ${studentName},
+The Editorial Board of Lahore Leads University has reviewed your research paper:
+📄 *Title:* "${articleTitle}"
+📊 *Plagiarism Score:* ${plag}%
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 *Reviewer Feedback & Remarks:*
+${notes}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 *Next Steps:*
+Please log in to your Student Portal to view full comments and upload your revised draft:
+http://localhost:5173/student`;
+
+  const emailSubject = `⚠️ Action Required: Editorial Remarks on "${articleTitle}" — Lahore Leads University ORIC`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Editorial Directorate • Peer Review Feedback</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #dc2626; margin-top: 0; font-size: 18px;">⚠️ Revisions Requested for Your Paper</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">The ORIC Editorial Review Board has completed the initial evaluation of your research paper <strong>"${articleTitle}"</strong>. Please review the reviewer feedback below and submit your corrections:</p>
+
+        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-left: 4px solid #e11d48; padding: 14px 16px; border-radius: 8px; margin: 16px 0;">
+          <strong style="color: #9f1239; font-size: 13px; display: block; margin-bottom: 4px;">Reviewer & Editorial Notes:</strong>
+          <p style="color: #881337; font-size: 13px; margin: 0; white-space: pre-wrap; line-height: 1.5;">${notes}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Plagiarism Check:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${plag}% (Verified)</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Submission Status:</td><td style="padding: 10px; color: #dc2626; font-weight: bold;">Needs Revision</td></tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal to Upload Corrected Paper →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendEmailDirect(studentEmail, emailSubject, emailHtml, whatsappMessage, { type: 'student_revision_feedback', studentName, articleId: article?.id })
+  ]);
+}
+
+async function notifyStudentPaperGraded({ student, article, tier, reviewerNotes, plagiarismScore, status }) {
+  const studentName = student?.full_name || article?.student_name || 'Student Researcher';
+  const studentEmail = student?.email || article?.user_email || 'student@leads.edu.pk';
+  const articleTitle = article?.title || 'Academic Manuscript';
+  const assignedTier = tier || article?.tier || 'Gold';
+
+  const emailSubject = `🎉 Paper Approved: Tier ${assignedTier} Awarded to "${articleTitle}" — Lahore Leads University`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Academic Tier Classification</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">🎉 Congratulations! Your Research Paper is Approved</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">The Editorial Review Board has officially accepted and classified your research paper:</p>
+
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 14px 16px; border-radius: 10px; margin: 16px 0; text-align: center;">
+          <span style="font-size: 12px; color: #065f46; font-weight: bold; text-transform: uppercase;">Awarded Research Tier</span>
+          <h2 style="color: #047857; margin: 4px 0; font-size: 24px;">🏆 ${assignedTier} Tier</h2>
+          <p style="color: #065f46; font-size: 12px; margin: 0;">Eligible for Official Journal Publication & Investor Showcase</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 35%;">Paper Title:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${articleTitle}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Editorial Remarks:</td><td style="padding: 10px; color: #0f172a;">${reviewerNotes || 'Meets international peer-review standards.'}</td></tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #059669; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Dashboard to Proceed →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendEmailDirect(studentEmail, emailSubject, emailHtml, `Congratulations! Your paper ${articleTitle} has been awarded ${assignedTier} Tier.`, { type: 'student_paper_graded', studentName, tier: assignedTier })
+  ]);
+}
+
+async function notifyStudentEmailConnectedTest({ student, adminEmail }) {
+  const studentName = student?.full_name || 'Student Scholar';
+  const studentEmail = student?.email || DEFAULT_ADMIN_EMAIL;
+
+  const emailSubject = `🔔 Gmail Notifications Connected — Lahore Leads University ORIC`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #2563eb; margin-top: 0; font-size: 18px;">✅ Gmail Live Sync Successfully Activated!</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">Your Gmail account (<strong>${studentEmail}</strong>) is now directly linked with the <strong>Lahore Leads University ORIC Administration Portal</strong>.</p>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px; border-radius: 10px; color: #166534; font-size: 13px; margin: 16px 0;">
+          📌 <strong>What you will receive automatically:</strong>
+          <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+            <li>Instant email alerts whenever the Admin responds to your manuscript.</li>
+            <li>Editorial remarks and mistakes identified during peer review.</li>
+            <li>Pass verification and live Google Meet access links.</li>
+            <li>Official Conference Day reminders and 1-click Google Calendar invites.</li>
+          </ul>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Go to Student Research Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendEmailDirect(studentEmail, emailSubject, emailHtml, `Gmail connected successfully for student ${studentName}`, { type: 'student_email_connected_test', studentName });
+}
+
+async function notifyStudentInquiryToAdmin({ student, inquiry }) {
+  const studentName = student?.full_name || inquiry?.user_name || 'Student Researcher';
+  const studentEmail = student?.email || inquiry?.user_email || 'student@leads.edu.pk';
+  const mobile = student?.mobile || inquiry?.sender_mobile || 'N/A';
+  const subject = inquiry?.subject || 'Research / Portal Inquiry';
+  const category = inquiry?.category || 'General Support';
+  const message = inquiry?.message || 'No details provided';
+  const date = new Date().toLocaleDateString('en-GB');
+  const time = new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
+
+  const whatsappMessage = 
+`💬 *NEW STUDENT INQUIRY (LEADS ORIC DESK)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Student:* ${studentName}
+📧 *Email:* ${studentEmail}
+📱 *Mobile:* ${mobile}
+📌 *Topic:* ${subject}
+📂 *Category:* ${category}
+📅 *Time:* ${date} (${time})
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 *Message:*
+${message}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 *Reply in Admin Portal:* http://localhost:5173/admin/inquiries`;
+
+  const emailSubject = `💬 [Student Inquiry] ${subject} — from ${studentName}`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Direct Student Inquiry Desk</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #2563eb; margin-top: 0; font-size: 18px;">💬 New Inquiry Submitted by Student</h3>
+        <p style="color: #334155; font-size: 14px;">Hello Admin,</p>
+        <p style="color: #334155; font-size: 14px;">A student has submitted a message / support inquiry through the Student Portal:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569; width: 30%;">Student:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${studentName}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Email:</td><td style="padding: 10px; color: #2563eb;"><a href="mailto:${studentEmail}">${studentEmail}</a></td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Mobile:</td><td style="padding: 10px; color: #0f172a;">${mobile}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Subject:</td><td style="padding: 10px; color: #0f172a; font-weight: bold;">${subject}</td></tr>
+          <tr><td style="padding: 10px; font-weight: bold; color: #475569;">Category:</td><td style="padding: 10px; color: #4338ca; font-weight: bold;">${category}</td></tr>
+        </table>
+
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; padding: 14px 16px; border-radius: 8px; margin: 16px 0;">
+          <strong style="color: #1e40af; font-size: 13px; display: block; margin-bottom: 4px;">Inquiry Content:</strong>
+          <p style="color: #1e3a8a; font-size: 13px; margin: 0; white-space: pre-wrap; line-height: 1.5;">${message}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/admin/inquiries" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Reply to Student in Admin Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const studentAckSubject = `💬 Inquiry Received: "${subject}" — Lahore Leads University ORIC`;
+  const studentAckHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">Office of Research, Innovation & Commercialization (ORIC)</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">✅ Your Inquiry Has Been Submitted</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">Your message regarding <strong>"${subject}"</strong> has been logged in the ORIC Directorate desk. Our administrative team will review it and reply directly to your Gmail inbox and Student Portal.</p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; margin: 16px 0;">
+          <strong style="color: #475569; font-size: 12px; text-transform: uppercase;">Your Message Summary:</strong>
+          <p style="color: #0f172a; font-size: 13px; margin: 6px 0 0 0; white-space: pre-wrap;">${message}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendAdminWhatsApp(whatsappMessage, { type: 'student_inquiry', studentName, subject }),
+    sendAdminEmail(emailSubject, emailHtml, whatsappMessage, { type: 'student_inquiry', studentName }),
+    studentEmail ? sendEmailDirect(studentEmail, studentAckSubject, studentAckHtml, `Inquiry received: ${subject}`, { type: 'student_inquiry_ack' }) : Promise.resolve()
+  ]);
+}
+
+async function notifyAdminReplyToStudent({ student, inquiry, replyText, adminName = 'ORIC Directorate Administrator' }) {
+  const studentName = student?.full_name || inquiry?.user_name || 'Student Researcher';
+  const studentEmail = student?.email || inquiry?.user_email || 'student@leads.edu.pk';
+  const subject = inquiry?.subject || 'Your Support Inquiry';
+
+  const emailSubject = `📬 Response from ORIC Admin: "${subject}" — Lahore Leads University`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="background: #0A192F; padding: 20px; border-radius: 12px; text-align: center; color: white;">
+        <h2 style="color: #FBBF24; margin: 0; font-size: 20px; letter-spacing: 0.5px;">LAHORE LEADS UNIVERSITY</h2>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #94A3B8;">ORIC Directorate • Official Response</p>
+      </div>
+
+      <div style="padding: 20px 0;">
+        <h3 style="color: #059669; margin-top: 0; font-size: 18px;">📬 Admin Response to Your Inquiry</h3>
+        <p style="color: #334155; font-size: 14px;">Dear <strong>${studentName}</strong>,</p>
+        <p style="color: #334155; font-size: 14px;">The ORIC Directorate (<strong>${adminName}</strong>) has reviewed your inquiry <strong>"${subject}"</strong> and provided the following official response:</p>
+
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-left: 4px solid #10b981; padding: 16px; border-radius: 8px; margin: 16px 0;">
+          <strong style="color: #065f46; font-size: 13px; display: block; margin-bottom: 6px;">Official Admin Remarks:</strong>
+          <p style="color: #064e3b; font-size: 14px; margin: 0; white-space: pre-wrap; line-height: 1.6; font-weight: 500;">${replyText}</p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 14px; border-radius: 8px; margin: 14px 0;">
+          <strong style="color: #64748b; font-size: 12px;">Your Original Query:</strong>
+          <p style="color: #475569; font-size: 12px; margin: 4px 0 0 0; white-space: pre-wrap;">${inquiry?.message || ''}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="http://localhost:5173/student" style="background: #0A192F; color: #FBBF24; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Open Student Portal to View Details →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await Promise.allSettled([
+    sendEmailDirect(studentEmail, emailSubject, emailHtml, `Admin response on ${subject}: ${replyText}`, { type: 'admin_inquiry_reply', studentName })
+  ]);
+}
+
 module.exports = {
   DEFAULT_ADMIN_WHATSAPP,
   DEFAULT_ADMIN_EMAIL,
@@ -864,5 +1345,12 @@ module.exports = {
   notifyArticlePublished,
   notifyTicketBooked,
   notifyTicketVerifiedAndIssued,
-  notifyReaderAccessRequested
+  notifyReaderAccessRequested,
+  notifyConferenceDayReminder,
+  notifyStudentRevisionRequested,
+  notifyStudentPaperGraded,
+  notifyStudentEmailConnectedTest,
+  notifyStudentInquiryToAdmin,
+  notifyAdminReplyToStudent
 };
+

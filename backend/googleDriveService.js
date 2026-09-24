@@ -448,9 +448,22 @@ Event Venue:       ${conference?.venue || 'Lahore Leads University Main Auditori
   let challanRes = null;
   if (receiptBase64) {
     try {
+      let ext = 'jpg';
+      let detectedMime = 'image/jpeg';
+      if (typeof receiptBase64 === 'string' && receiptBase64.startsWith('data:')) {
+        const mimeMatch = receiptBase64.match(/data:(.*?);/);
+        if (mimeMatch && mimeMatch[1]) {
+          detectedMime = mimeMatch[1];
+          if (detectedMime.includes('pdf')) ext = 'pdf';
+          else if (detectedMime.includes('png')) ext = 'png';
+          else if (detectedMime.includes('webp')) ext = 'webp';
+          else ext = 'jpg';
+        }
+      }
       challanRes = await uploadBase64ToDrive({
         base64Data: receiptBase64,
-        fileName: `02_Pass_Payment_Challan_${Date.now()}`,
+        fileName: `02_Pass_Payment_Challan_${Date.now()}.${ext}`,
+        mimeType: detectedMime,
         subfolderName: subfolder
       });
     } catch (err) {
@@ -461,7 +474,7 @@ Event Venue:       ${conference?.venue || 'Lahore Leads University Main Auditori
   return {
     subfolder,
     metadataDocUrl: metadataDocRes?.webViewLink || metadataDocRes?.localUrl,
-    challanUrl: challanRes?.directLink || challanRes?.webViewLink || challanRes?.localUrl
+    challanUrl: challanRes?.webViewLink || challanRes?.directLink || challanRes?.previewLink || challanRes?.localUrl
   };
 }
 
@@ -478,6 +491,139 @@ async function backupDatabaseToDrive(db) {
   return { ...result, recordCount: Object.values(snapshot.tables).reduce((n, rows) => n + rows.length, 0), tablesCount: Object.keys(snapshot.tables).length };
 }
 
+async function getFileStreamFromDrive(fileId) {
+  const drive = getDriveClient();
+  if (!drive) throw new Error('Google Drive is not configured.');
+
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'id, name, mimeType, size',
+    supportsAllDrives: true
+  });
+
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' }
+  );
+
+  return {
+    meta: meta.data,
+    stream: res.data,
+    mimeType: meta.data.mimeType || 'application/octet-stream',
+    fileName: meta.data.name || 'file'
+  };
+}
+
+async function uploadStudentInquiryPackage({ student, inquiry, replyText, adminName }) {
+  const studentName = student?.full_name || inquiry?.user_name || 'Student_Scholar';
+  const studentEmail = student?.email || inquiry?.user_email || 'student@leads.edu.pk';
+  const cleanStudent = studentName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+  const inquiryId = inquiry?.id || Date.now();
+  const subfolder = `Student_Inquiries/${cleanStudent}_ID${student?.id || inquiry?.user_id || 'guest'}`;
+
+  const metadataText = `===================================================================
+LAHORE LEADS UNIVERSITY - ORIC INQUIRY & SUPPORT DESK
+OFFICIAL STUDENT-ADMIN CORRESPONDENCE RECORD
+===================================================================
+Inquiry Ref ID:    INQ-LLU-${inquiryId}
+Student Name:      ${studentName}
+Student Email:     ${studentEmail}
+Student Mobile:    ${student?.mobile || inquiry?.sender_mobile || 'N/A'}
+Subject / Topic:   ${inquiry?.subject || 'Research / Portal Inquiry'}
+Category:          ${inquiry?.category || 'General Support'}
+Submitted Date:    ${inquiry?.created_at || new Date().toLocaleString()}
+Status:            ${replyText ? 'REPLIED & RESOLVED' : 'PENDING ORIC RESPONSE'}
+-------------------------------------------------------------------
+STUDENT INQUIRY MESSAGE:
+${inquiry?.message || 'No inquiry text provided'}
+-------------------------------------------------------------------
+${replyText ? `ADMINISTRATOR OFFICIAL RESPONSE:
+Responder:     ${adminName || 'ORIC Directorate Administrator'}
+Response Date: ${new Date().toLocaleString()}
+Remarks:
+${replyText}
+===================================================================` : `===================================================================`}`;
+
+  const metaBase64 = `data:text/plain;base64,${Buffer.from(metadataText).toString('base64')}`;
+  let metadataDocRes = null;
+  try {
+    metadataDocRes = await uploadBase64ToDrive({
+      base64Data: metaBase64,
+      fileName: `01_Inquiry_Record_${inquiryId}.txt`,
+      mimeType: 'text/plain',
+      subfolderName: subfolder
+    });
+  } catch (err) {
+    console.warn('⚠️ Could not upload inquiry metadata document:', err.message);
+  }
+
+  return {
+    subfolder,
+    metadataDocUrl: metadataDocRes?.webViewLink || metadataDocRes?.localUrl
+  };
+}
+
+async function uploadStudentRevisionPackage({ student, article, revisionNotes, pdfBase64 }) {
+  const studentName = student?.full_name || article?.student_name || 'Student_Researcher';
+  const studentEmail = student?.email || 'student@leads.edu.pk';
+  const paperTitle = article?.title || 'Research_Paper';
+  const cleanStudent = studentName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+  const cleanPaper = paperTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_').slice(0, 45);
+  const subfolder = `Student_Submissions/${cleanStudent}/${cleanPaper}/Revisions`;
+
+  const metadataText = `===================================================================
+LAHORE LEADS UNIVERSITY - ORIC RESEARCH REPOSITORY
+OFFICIAL REVISED MANUSCRIPT SUBMISSION RECORD
+===================================================================
+Article ID:        LLU-ART-${article?.id || Date.now()}
+Student Name:      ${studentName}
+Student Email:     ${studentEmail}
+Paper Title:       ${paperTitle}
+Resubmission Date: ${new Date().toLocaleString()}
+Revision Count:    ${(article?.resubmission_count || 0) + 1}
+Status:            Resubmitted - Awaiting Re-Evaluation
+-------------------------------------------------------------------
+AUTHOR REVISION NOTES / CORRECTION EXPLANATION:
+${revisionNotes || 'Manuscript updated according to reviewer editorial comments.'}
+-------------------------------------------------------------------
+MANUSCRIPT FULL TEXT / ABSTRACT:
+${article?.full_text || article?.abstract || 'Updated text attached'}
+===================================================================`;
+
+  const metaBase64 = `data:text/plain;base64,${Buffer.from(metadataText).toString('base64')}`;
+  let metadataDocRes = null;
+  try {
+    metadataDocRes = await uploadBase64ToDrive({
+      base64Data: metaBase64,
+      fileName: `01_Revision_Metadata_${Date.now()}.txt`,
+      mimeType: 'text/plain',
+      subfolderName: subfolder
+    });
+  } catch (err) {
+    console.warn('⚠️ Could not upload revision metadata document:', err.message);
+  }
+
+  let pdfRes = null;
+  if (pdfBase64 && (pdfBase64.startsWith('data:') || pdfBase64.length > 500)) {
+    try {
+      pdfRes = await uploadBase64ToDrive({
+        base64Data: pdfBase64,
+        fileName: `02_Corrected_Manuscript_v${(article?.resubmission_count || 0) + 1}.pdf`,
+        mimeType: 'application/pdf',
+        subfolderName: subfolder
+      });
+    } catch (err) {
+      console.warn('⚠️ Could not upload revised PDF to Drive:', err.message);
+    }
+  }
+
+  return {
+    subfolder,
+    metadataDocUrl: metadataDocRes?.webViewLink || metadataDocRes?.localUrl,
+    pdfUrl: pdfRes?.webViewLink || pdfRes?.localUrl
+  };
+}
+
 module.exports = {
   getDriveClient,
   testDriveConnection,
@@ -488,6 +634,9 @@ module.exports = {
   uploadBase64ToDrive,
   uploadStudentArticlePackage,
   uploadConferencePassPackage,
+  uploadStudentInquiryPackage,
+  uploadStudentRevisionPackage,
   backupDatabaseToDrive,
-  saveLocalUpload
+  saveLocalUpload,
+  getFileStreamFromDrive
 };

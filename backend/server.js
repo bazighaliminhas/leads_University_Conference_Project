@@ -13,6 +13,7 @@ const {
   notificationHistory,
   sendAdminWhatsApp,
   sendAdminEmail,
+  sendEmailDirect,
   notifyNewArticleSubmission,
   notifyArticleResubmitted,
   notifyPublicationFeePaid,
@@ -21,8 +22,20 @@ const {
   notifyArticlePublished,
   notifyTicketBooked,
   notifyTicketVerifiedAndIssued,
-  notifyReaderAccessRequested
+  notifyReaderAccessRequested,
+  notifyConferenceDayReminder,
+  notifyStudentRevisionRequested,
+  notifyStudentPaperGraded,
+  notifyStudentEmailConnectedTest,
+  notifyStudentInquiryToAdmin,
+  notifyAdminReplyToStudent
 } = require('./notificationService');
+
+const {
+  scheduleConferenceCalendarEvent,
+  buildGoogleCalendarWebUrl,
+  generateDeterministicMeetCode
+} = require('./googleCalendarService');
 
 const multer = require('multer');
 const upload = multer({
@@ -36,10 +49,13 @@ const {
   uploadBase64ToDrive,
   uploadStudentArticlePackage,
   uploadConferencePassPackage,
+  uploadStudentInquiryPackage,
+  uploadStudentRevisionPackage,
   backupDatabaseToDrive,
   saveStorageConfig,
   saveLocalUpload,
-  getStorageConfigSummary
+  getStorageConfigSummary,
+  getFileStreamFromDrive
 } = require('./googleDriveService');
 
 // Helper to auto-upload base64/receipts with zero-failure local disk + Google Drive dual storage
@@ -85,6 +101,21 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static uploads serving for 100% reliable local slip & receipt inspection
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Direct Google Drive Stream Proxy for 100% reliable slip inspection without CORS or auth issues
+app.get('/api/drive-proxy/:fileId', async (req, res) => {
+  const { fileId } = req.params;
+  try {
+    const file = await getFileStreamFromDrive(fileId);
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${file.fileName}"`);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    file.stream.pipe(res);
+  } catch (err) {
+    console.error('Drive proxy error:', err.message);
+    res.redirect(`https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`);
+  }
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'univ_conference_secret_key_2026';
 
@@ -310,6 +341,24 @@ async function initDatabase() {
       );
     `);
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`inquiries\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`user_id\` INT NULL,
+        \`user_name\` VARCHAR(255) DEFAULT '',
+        \`user_email\` VARCHAR(255) DEFAULT '',
+        \`sender_mobile\` VARCHAR(50) DEFAULT '',
+        \`subject\` VARCHAR(255) NOT NULL,
+        \`category\` VARCHAR(100) DEFAULT 'General Support',
+        \`message\` TEXT NOT NULL,
+        \`admin_reply\` TEXT NULL,
+        \`replied_by\` VARCHAR(255) NULL,
+        \`replied_at\` VARCHAR(100) NULL,
+        \`status\` VARCHAR(50) DEFAULT 'Pending',
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Ensure missing columns
     await ensureColumn('articles', 'student_name', "VARCHAR(255) DEFAULT ''");
     await ensureColumn('articles', 'journal_id', "INT DEFAULT 1");
@@ -336,6 +385,8 @@ async function initDatabase() {
     await ensureColumn('conferences', 'event_time', "VARCHAR(100) DEFAULT '10:00 AM - 04:00 PM'");
     await ensureColumn('conferences', 'cover_image', 'TEXT');
     await ensureColumn('conferences', 'presenting_students', 'TEXT');
+    await ensureColumn('conferences', 'calendar_event_id', "VARCHAR(255) DEFAULT ''");
+    await ensureColumn('conferences', 'calendar_html_link', "TEXT");
     await ensureColumn('tickets', 'user_name', "VARCHAR(255) DEFAULT ''");
     await ensureColumn('tickets', 'user_email', "VARCHAR(255) DEFAULT ''");
     await ensureColumn('tickets', 'seat_number', "VARCHAR(100) DEFAULT 'Seat Row A - #01'");
@@ -941,6 +992,24 @@ let mockGallery = [
   }
 ];
 
+let mockInquiries = [
+  {
+    id: 1,
+    user_id: 5,
+    user_name: 'Bazigh Minhas',
+    user_email: 'bazighminhas1@gmail.com',
+    sender_mobile: '0348-2727605',
+    subject: 'Inquiry regarding Journal Volume 1 Issue 2 Publication',
+    category: 'Publication Guidance',
+    message: 'Dear ORIC Editorial Board, I would like to inquire regarding the exact release date of RAIR Volume 1 Issue 2.',
+    admin_reply: 'Dear Bazigh, Volume 1 Issue 2 is scheduled for official indexation on October 30, 2026.',
+    replied_by: 'System Admin (ORIC)',
+    replied_at: '2026-09-01 14:30:00',
+    status: 'Replied',
+    created_at: '2026-09-01'
+  }
+];
+
 // Permanent Local Data Store (Ensures 100% data persistence even without MySQL)
 const DATA_STORE_FILE = path.join(__dirname, '.data-store.json');
 
@@ -955,6 +1024,21 @@ function loadPersistentDataStore() {
       if (Array.isArray(parsed.mockTickets) && parsed.mockTickets.length > 0) mockTickets = parsed.mockTickets;
       if (Array.isArray(parsed.mockInvestorReviews) && parsed.mockInvestorReviews.length > 0) mockInvestorReviews = parsed.mockInvestorReviews;
       if (Array.isArray(parsed.mockPortalNotifications)) mockPortalNotifications = parsed.mockPortalNotifications;
+      if (Array.isArray(parsed.mockInquiries)) mockInquiries = parsed.mockInquiries;
+
+      // Auto-sanitize all conference & pass meet codes to strictly valid Google Meet format ([a-z]{3}-[a-z]{4}-[a-z]{3})
+      mockConferences.forEach(conf => {
+        if (!conf.stream_link || conf.stream_link.includes('xyz-demo-stream') || !conf.stream_link.match(/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/)) {
+          conf.stream_link = generateDeterministicMeetCode(conf.id, conf.title);
+        }
+      });
+      mockTickets.forEach(t => {
+        if (!t.stream_link || t.stream_link.includes('xyz-demo-stream') || t.stream_link.includes('leads-summit-2026') || !t.stream_link.match(/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/)) {
+          const c = mockConferences.find(x => x.id == t.conference_id);
+          t.stream_link = c?.stream_link || generateDeterministicMeetCode(t.conference_id || 1, t.conference_title || 'Conference');
+        }
+      });
+
       console.log('✅ [PERSISTENT STORE] Successfully loaded all saved articles, conferences & users from disk!');
     }
   } catch (e) {
@@ -972,7 +1056,8 @@ function savePersistentDataStore() {
       mockJournals,
       mockTickets,
       mockInvestorReviews,
-      mockPortalNotifications
+      mockPortalNotifications,
+      mockInquiries
     };
     fs.writeFileSync(DATA_STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
   } catch (e) {
@@ -1520,7 +1605,25 @@ app.post('/api/articles/:id/request-revision', authenticateToken, async (req, re
         [revision_notes || reviewer_notes, reviewer_notes, plagiarism_score, articleId]
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
-      return res.json({ message: 'Revision feedback sent to student!', article: updatedRows[0] });
+      const updated = updatedRows[0];
+
+      // Dispatch Email & WhatsApp directly to student
+      let studentUser = null;
+      try {
+        const [users] = await db.query('SELECT * FROM users WHERE id = ?', [updated.student_id]);
+        if (users.length > 0) studentUser = users[0];
+      } catch (_) {}
+      notifyStudentRevisionRequested({
+        student: studentUser || { full_name: updated.student_name, email: updated.user_email },
+        article: updated,
+        revisionNotes: revision_notes,
+        reviewerNotes: reviewer_notes,
+        plagiarismScore: plagiarism_score
+      }).catch(err => console.error('Student revision notification error:', err));
+
+      createPortalNotification({ userId: updated.student_id, type: 'article_review', title: '⚠️ Revision Requested', message: `Editorial board requested revisions on "${updated.title}". Notes: ${revision_notes || reviewer_notes || ''}`, link: '/student' });
+
+      return res.json({ message: 'Revision feedback sent to student via Email & Portal!', article: updated });
     } catch (err) {
       console.error('DB operation error:', err.message);
     }
@@ -1536,16 +1639,36 @@ app.post('/api/articles/:id/request-revision', authenticateToken, async (req, re
   article.admin_unread = false;
   article.student_unread = true;
 
-  res.json({ message: 'Revision feedback sent to student!', article });
+  const studentUser = mockUsers.find(u => u.id == article.student_id);
+  notifyStudentRevisionRequested({
+    student: studentUser || { full_name: article.student_name, email: 'student@leads.edu.pk' },
+    article,
+    revisionNotes: revision_notes,
+    reviewerNotes: reviewer_notes,
+    plagiarismScore: plagiarism_score
+  }).catch(err => console.error('Student revision notification error:', err));
+
+  createPortalNotification({ userId: article.student_id, type: 'article_review', title: '⚠️ Revision Requested', message: `Editorial board requested revisions on "${article.title}".`, link: '/student' });
+
+  res.json({ message: 'Revision feedback sent to student via Email & Portal!', article });
 });
 
 // Student Route: Resubmit Revised Manuscript with Corrections
 app.post('/api/articles/:id/resubmit', authenticateToken, async (req, res) => {
   const articleId = req.params.id;
   const { title, abstract, full_text, pdf_url, revision_response } = req.body;
+  const article = mockArticles.find(a => a.id == articleId);
 
   // Offload revised PDF to Google Drive
   const cleanPdf = await resolveDriveUrl(pdf_url, 'Research_Papers_Revisions', 'revised_paper');
+
+  // Archive revision package to Google Drive
+  uploadStudentRevisionPackage({
+    student: req.user,
+    article: { id: articleId, title: title || article?.title, abstract: abstract || article?.abstract, full_text: full_text || article?.full_text, resubmission_count: (article?.resubmission_count || 0) },
+    revisionNotes: revision_response || req.body.revision_notes,
+    pdfBase64: pdf_url
+  }).catch(e => console.warn('⚠️ [GOOGLE DRIVE] Revision package notice:', e.message));
 
   if (isDbConnected) {
     try {
@@ -1563,13 +1686,17 @@ app.post('/api/articles/:id/resubmit', authenticateToken, async (req, res) => {
         [title, abstract, full_text, cleanPdf, articleId, req.user.id]
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
+      const resubmitted = updatedRows[0];
+
+      createPortalNotification({ roleTarget: 'admin', type: 'resubmission', title: '🔄 Revised Manuscript Resubmitted', message: `${req.user.full_name} uploaded revised draft for "${resubmitted?.title || title}".`, link: '/admin/articles' });
+      createPortalNotification({ userId: req.user.id, type: 'resubmission', title: '✅ Resubmission Received', message: `Your revised draft for "${resubmitted?.title || title}" is under re-evaluation.`, link: '/student' });
 
       notifyArticleResubmitted({
         student: req.user,
-        article: updatedRows[0]
+        article: resubmitted
       }).catch(err => console.error('Notification dispatch error:', err));
 
-      return res.json({ message: 'Revised manuscript resubmitted to Editorial Board!', article: updatedRows[0] });
+      return res.json({ message: 'Revised manuscript resubmitted to Editorial Board!', article: resubmitted });
     } catch (err) {
       console.error('DB operation error:', err.message);
     }
@@ -1586,6 +1713,9 @@ app.post('/api/articles/:id/resubmit', authenticateToken, async (req, res) => {
     article.student_unread = false;
     if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
   }
+
+  createPortalNotification({ roleTarget: 'admin', type: 'resubmission', title: '🔄 Revised Manuscript Resubmitted', message: `${req.user.full_name} uploaded revised draft for "${article?.title || title}".`, link: '/admin/articles' });
+  createPortalNotification({ userId: req.user.id, type: 'resubmission', title: '✅ Resubmission Received', message: `Your revised draft for "${article?.title || title}" is under re-evaluation.`, link: '/student' });
 
   notifyArticleResubmitted({
     student: req.user,
@@ -1622,7 +1752,37 @@ app.put('/api/articles/:id/review', authenticateToken, async (req, res) => {
       );
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
       const reviewed = updatedRows[0];
-      if (reviewed) createPortalNotification({ userId: reviewed.student_id, type: 'article_review', title: 'Article review updated', message: `Your article “${reviewed.title}” status is now: ${reviewed.status}.`, link: `/student/paper/${reviewed.id}` });
+      if (reviewed) {
+        createPortalNotification({ userId: reviewed.student_id, type: 'article_review', title: 'Article review updated', message: `Your article “${reviewed.title}” status is now: ${reviewed.status}.`, link: `/student/paper/${reviewed.id}` });
+        
+        let studentUser = null;
+        try {
+          const [users] = await db.query('SELECT * FROM users WHERE id = ?', [reviewed.student_id]);
+          if (users.length > 0) studentUser = users[0];
+        } catch (_) {}
+
+        const studentEmail = studentUser?.email || reviewed.user_email || process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+        const studentName = studentUser?.full_name || reviewed.student_name || 'Student Scholar';
+
+        if (reviewed.status === 'Needs Revision' || admin_revision_notes) {
+          notifyStudentRevisionRequested({
+            student: { full_name: studentName, email: studentEmail },
+            article: reviewed,
+            revisionNotes: admin_revision_notes || reviewer_notes,
+            reviewerNotes: reviewer_notes,
+            plagiarismScore: plagiarism_score !== undefined ? plagiarism_score : reviewed.plagiarism_score
+          }).catch(err => console.error('Student revision notification error:', err));
+        } else {
+          notifyStudentPaperGraded({
+            student: { full_name: studentName, email: studentEmail },
+            article: reviewed,
+            tier: reviewed.tier,
+            reviewerNotes: reviewer_notes || reviewed.reviewer_notes,
+            plagiarismScore: plagiarism_score !== undefined ? plagiarism_score : reviewed.plagiarism_score,
+            status: reviewed.status
+          }).catch(err => console.error('Student grading notification error:', err));
+        }
+      }
       return res.json({ message: 'Article review submitted by Admin!', article: reviewed });
     } catch (err) {
       console.error('MySQL Admin Review Error:', err);
@@ -1646,6 +1806,29 @@ app.put('/api/articles/:id/review', authenticateToken, async (req, res) => {
   article.student_unread = true;
   if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
   createPortalNotification({ userId: article.student_id, type: 'article_review', title: 'Article review updated', message: `Your article “${article.title}” status is now: ${article.status}.`, link: `/student/paper/${article.id}` });
+
+  const studentUser = mockUsers.find(u => u.id == article.student_id);
+  const studentEmail = studentUser?.email || article.user_email || process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+  const studentName = studentUser?.full_name || article.student_name || 'Student Scholar';
+
+  if (article.status === 'Needs Revision' || admin_revision_notes) {
+    notifyStudentRevisionRequested({
+      student: { full_name: studentName, email: studentEmail },
+      article,
+      revisionNotes: admin_revision_notes || reviewer_notes,
+      reviewerNotes: reviewer_notes,
+      plagiarismScore: plagiarism_score !== undefined ? plagiarism_score : article.plagiarism_score
+    }).catch(err => console.error('Student revision notification error:', err));
+  } else {
+    notifyStudentPaperGraded({
+      student: { full_name: studentName, email: studentEmail },
+      article,
+      tier: article.tier,
+      reviewerNotes: reviewer_notes || article.reviewer_notes,
+      plagiarismScore: plagiarism_score !== undefined ? plagiarism_score : article.plagiarism_score,
+      status: article.status
+    }).catch(err => console.error('Student grading notification error:', err));
+  }
 
   res.json({ message: 'Article review submitted by Admin!', article });
 });
@@ -1741,7 +1924,24 @@ app.put('/api/articles/:id/publish', authenticateToken, async (req, res) => {
       const [updatedRows] = await db.query('SELECT * FROM articles WHERE id = ?', [articleId]);
       
       if (pubState && updatedRows[0]) {
-        notifyArticlePublished({ article: updatedRows[0], adminUser: req.user }).catch(err => console.error('Notification dispatch error:', err));
+        let studentEmail = null;
+        let studentName = updatedRows[0].student_name;
+        if (updatedRows[0].student_id) {
+          try {
+            const [users] = await db.query('SELECT full_name, email FROM users WHERE id = ?', [updatedRows[0].student_id]);
+            if (users.length > 0) {
+              studentEmail = users[0].email;
+              studentName = users[0].full_name || studentName;
+            }
+          } catch (_) {}
+        }
+        if (!studentEmail) studentEmail = process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+
+        notifyArticlePublished({
+          article: updatedRows[0],
+          student: { full_name: studentName, email: studentEmail },
+          adminUser: req.user
+        }).catch(err => console.error('Notification dispatch error:', err));
         createPortalNotification({ userId: updatedRows[0].student_id, type: 'published', title: 'Your article is published', message: `“${updatedRows[0].title}” is now live in the journal portal.`, link: `/article/${updatedRows[0].id}` });
       }
 
@@ -1766,7 +1966,15 @@ app.put('/api/articles/:id/publish', authenticateToken, async (req, res) => {
   }
 
   if (pubState && article) {
-    notifyArticlePublished({ article, adminUser: req.user }).catch(err => console.error('Notification dispatch error:', err));
+    const memUser = mockUsers.find(u => u.id == article.student_id);
+    const studentEmail = memUser?.email || article.user_email || process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+    const studentName = memUser?.full_name || article.student_name || 'Student Author';
+
+    notifyArticlePublished({
+      article,
+      student: { full_name: studentName, email: studentEmail },
+      adminUser: req.user
+    }).catch(err => console.error('Notification dispatch error:', err));
   }
 
   res.json({ message: `Article ${pubState ? 'verified & published to' : 'un-published from'} main site!`, article });
@@ -2079,7 +2287,7 @@ app.delete('/api/admin/articles/:id', authenticateToken, async (req, res) => {
   res.json({ message: 'Article removed permanently!' });
 });
 
-// Admin Route: Create New Conference
+// Admin Route: Create New Conference (with Automatic Google Calendar & Google Meet Scheduling)
 app.post('/api/admin/conferences', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Only Admin can create conferences' });
@@ -2105,31 +2313,64 @@ app.post('/api/admin/conferences', authenticateToken, async (req, res) => {
   const confCover = cover_image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80';
   const confDate = event_date || '2026-10-15';
   const confTime = event_time || '10:00 AM - 04:00 PM';
-  const confVenue = venue || 'University Main Auditorium';
-  const confStream = stream_link || 'https://meet.google.com/xyz-conference-stream';
+  const confVenue = venue || 'University Main Auditorium & Virtual Stream';
   const confPresenters = presenting_students || '';
   const confInvestors = attending_investors || '';
   const confStatus = status || 'Upcoming';
   const confOnsitePrice = onsite_ticket_price !== undefined ? onsite_ticket_price : 500.00;
   const confOnlinePrice = online_ticket_price !== undefined ? online_ticket_price : 200.00;
 
+  // Auto-generate Google Calendar Event and Google Meet Link
+  const tempId = Date.now();
+  let calResult = { meetUrl: 'https://meet.google.com', calendarEventId: '', calendarHtmlLink: '' };
+  try {
+    calResult = await scheduleConferenceCalendarEvent({
+      conferenceId: tempId,
+      title: confTitle,
+      description: confDesc,
+      eventDate: confDate,
+      eventTime: confTime,
+      venue: confVenue
+    });
+  } catch (e) {
+    console.warn('⚠️ Google Calendar schedule warning:', e.message);
+  }
+
+  const confStream = (stream_link && stream_link.trim() !== '' && !stream_link.includes('xyz-demo-stream')) 
+    ? stream_link 
+    : (calResult.meetUrl || generateDeterministicMeetCode(tempId, confTitle));
+  const calEventId = calResult.calendarEventId || '';
+  const calHtmlLink = calResult.calendarHtmlLink || buildGoogleCalendarWebUrl({ title: confTitle, description: confDesc, eventDate: confDate, eventTime: confTime, venue: confVenue, meetUrl: confStream });
+
   if (isDbConnected) {
     try {
       const [result] = await db.query(
-        'INSERT INTO conferences (title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [confTitle, confDesc, confCover, confDate, confTime, confVenue, confStream, confPresenters, confInvestors, confStatus, confOnsitePrice, confOnlinePrice]
+        'INSERT INTO conferences (title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price, calendar_event_id, calendar_html_link) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [confTitle, confDesc, confCover, confDate, confTime, confVenue, confStream, confPresenters, confInvestors, confStatus, confOnsitePrice, confOnlinePrice, calEventId, calHtmlLink]
       );
 
       const [newConfRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [result.insertId]);
-      const createdConf = newConfRows[0] || { id: result.insertId, title: confTitle, event_date: confDate, venue: confVenue };
+      const createdConf = newConfRows[0] || { id: result.insertId, title: confTitle, event_date: confDate, venue: confVenue, stream_link: confStream, calendar_html_link: calHtmlLink };
 
       // Dispatch WhatsApp & Email notification to Admin via Kapso
       notifyConferencePublished({ conference: createdConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
-      notifyAllStudents({ type: 'conference', title: 'New conference published', message: `${createdConf.title} has been published for ${createdConf.event_date}.`, link: '/conferences' });
+      notifyAllStudents({ type: 'conference', title: 'New conference published', message: `${createdConf.title} has been published for ${createdConf.event_date} with Google Meet virtual link.`, link: '/conferences' });
 
-      return res.status(201).json({ message: 'New conference created and published live!', conference: createdConf });
+      return res.status(201).json({ message: 'New conference created with Google Meet & Google Calendar live!', conference: createdConf });
     } catch (err) {
       console.error('MySQL Admin Create Conference Error:', err);
+      // Fallback insert without calendar columns if older schema
+      try {
+        const [result] = await db.query(
+          'INSERT INTO conferences (title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [confTitle, confDesc, confCover, confDate, confTime, confVenue, confStream, confPresenters, confInvestors, confStatus, confOnsitePrice, confOnlinePrice]
+        );
+        const [newConfRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [result.insertId]);
+        const createdConf = newConfRows[0] || { id: result.insertId, title: confTitle, event_date: confDate, venue: confVenue, stream_link: confStream };
+        return res.status(201).json({ message: 'New conference created and published live!', conference: createdConf });
+      } catch (fallbackErr) {
+        console.error('Create conference database fallback error:', fallbackErr);
+      }
     }
   }
 
@@ -2146,34 +2387,56 @@ app.post('/api/admin/conferences', authenticateToken, async (req, res) => {
     attending_investors: confInvestors,
     status: confStatus,
     onsite_ticket_price: confOnsitePrice,
-    online_ticket_price: confOnlinePrice
+    online_ticket_price: confOnlinePrice,
+    calendar_event_id: calEventId,
+    calendar_html_link: calHtmlLink
   };
 
   mockConferences.unshift(newConf);
   if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
 
-  // Dispatch WhatsApp & Email notification to Admin via Kapso
   notifyConferencePublished({ conference: newConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
   notifyAllStudents({ type: 'conference', title: 'New conference published', message: `${newConf.title} has been published for ${newConf.event_date}.`, link: '/conferences' });
 
-  res.status(201).json({ message: 'New conference created and published live!', conference: newConf });
+  res.status(201).json({ message: 'New conference created with Google Meet & Google Calendar live!', conference: newConf });
 });
 
 // Fallback direct POST route
 app.post('/api/conferences', authenticateToken, async (req, res) => {
-  // Delegate to same handler
   req.url = '/api/admin/conferences';
   app._router.handle(req, res);
 });
 
-// Admin Route: Edit Conference Schedule, Cover Image, Presenting Students & Attending Investors
+// Admin Route: Edit Conference Schedule, Google Meet & Calendar
 app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Only Admin can update conference details' });
   }
 
   const confId = req.params.id;
-  const { title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price } = req.body;
+  const { title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, onsite_ticket_price, online_ticket_price, auto_schedule_calendar } = req.body;
+
+  let freshStreamLink = stream_link;
+  let calEventId = null;
+  let calHtmlLink = null;
+
+  if (auto_schedule_calendar || !stream_link || stream_link.includes('xyz-demo-stream')) {
+    try {
+      const calRes = await scheduleConferenceCalendarEvent({
+        conferenceId: confId,
+        title: title || 'University Conference',
+        description: description || '',
+        eventDate: event_date,
+        eventTime: event_time,
+        venue: venue
+      });
+      freshStreamLink = calRes.meetUrl;
+      calEventId = calRes.calendarEventId;
+      calHtmlLink = calRes.calendarHtmlLink;
+    } catch (e) {
+      console.warn('Google Calendar update warning:', e.message);
+    }
+  }
 
   if (isDbConnected) {
     try {
@@ -2187,41 +2450,37 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
       const updatedDate = event_date || current.event_date;
       const updatedTime = event_time || current.event_time;
       const updatedVenue = venue || current.venue;
-      const updatedStream = stream_link || current.stream_link;
+      const updatedStream = freshStreamLink || current.stream_link || generateDeterministicMeetCode(confId, updatedTitle);
       const updatedStudents = presenting_students !== undefined ? presenting_students : current.presenting_students;
       const updatedInvestors = attending_investors !== undefined ? attending_investors : current.attending_investors;
       const updatedStatus = status || current.status;
       const updatedOnsitePrice = onsite_ticket_price !== undefined ? onsite_ticket_price : (current.onsite_ticket_price || 500.00);
       const updatedOnlinePrice = online_ticket_price !== undefined ? online_ticket_price : (current.online_ticket_price || 200.00);
+      const updatedCalEventId = calEventId || current.calendar_event_id || '';
+      const updatedCalLink = calHtmlLink || current.calendar_html_link || buildGoogleCalendarWebUrl({ title: updatedTitle, description: updatedDesc, eventDate: updatedDate, eventTime: updatedTime, venue: updatedVenue, meetUrl: updatedStream });
 
       await db.query(
-        'UPDATE conferences SET title = ?, description = ?, cover_image = ?, event_date = ?, event_time = ?, venue = ?, stream_link = ?, presenting_students = ?, attending_investors = ?, status = ?, onsite_ticket_price = ?, online_ticket_price = ? WHERE id = ?',
-        [updatedTitle, updatedDesc, updatedCover, updatedDate, updatedTime, updatedVenue, updatedStream, updatedStudents, updatedInvestors, updatedStatus, updatedOnsitePrice, updatedOnlinePrice, confId]
+        'UPDATE conferences SET title = ?, description = ?, cover_image = ?, event_date = ?, event_time = ?, venue = ?, stream_link = ?, presenting_students = ?, attending_investors = ?, status = ?, onsite_ticket_price = ?, online_ticket_price = ?, calendar_event_id = ?, calendar_html_link = ? WHERE id = ?',
+        [updatedTitle, updatedDesc, updatedCover, updatedDate, updatedTime, updatedVenue, updatedStream, updatedStudents, updatedInvestors, updatedStatus, updatedOnsitePrice, updatedOnlinePrice, updatedCalEventId, updatedCalLink, confId]
       );
 
       const [updatedRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
       const savedConf = updatedRows[0];
 
-      // Dispatch WhatsApp & Email notification to Admin via Kapso
       notifyConferencePublished({ conference: savedConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
       notifyAllStudents({ type: 'conference', title: `🎤 Conference Scheduled: ${savedConf.title}`, message: `Event date: ${savedConf.event_date} (${savedConf.event_time || '10:00 AM - 04:00 PM'}) at ${savedConf.venue || 'University Main Auditorium'}.`, link: '/conferences' });
 
-      return res.json({ message: 'Conference details published to main site!', conference: savedConf });
+      return res.json({ message: 'Conference details & Google Meet link updated!', conference: savedConf });
     } catch (err) {
       console.error('MySQL Admin Edit Conference Error:', err);
-      // If columns missing, fallback gracefully
       try {
         await db.query(
           'UPDATE conferences SET title = ?, description = ?, cover_image = ?, event_date = ?, event_time = ?, venue = ?, stream_link = ?, presenting_students = ?, attending_investors = ?, status = ? WHERE id = ?',
-          [title, description, cover_image, event_date, event_time, venue, stream_link, presenting_students, attending_investors, status, confId]
+          [title, description, cover_image, event_date, event_time, venue, freshStreamLink || stream_link, presenting_students, attending_investors, status, confId]
         );
         const [updatedRows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
         const savedConf = updatedRows[0];
-
-        notifyConferencePublished({ conference: savedConf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
-        notifyAllStudents({ type: 'conference', title: `🎤 Conference Scheduled: ${savedConf.title}`, message: `Event date: ${savedConf.event_date} (${savedConf.event_time || '10:00 AM - 04:00 PM'}) at ${savedConf.venue || 'University Main Auditorium'}.`, link: '/conferences' });
-
-        return res.json({ message: 'Conference details published to main site!', conference: savedConf });
+        return res.json({ message: 'Conference details updated!', conference: savedConf });
       } catch (fallbackErr) {
         return res.status(500).json({ message: 'Database error updating conference' });
       }
@@ -2237,7 +2496,9 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   if (event_date) conf.event_date = event_date;
   if (event_time) conf.event_time = event_time;
   if (venue) conf.venue = venue;
-  if (stream_link) conf.stream_link = stream_link;
+  if (freshStreamLink) conf.stream_link = freshStreamLink;
+  if (calEventId) conf.calendar_event_id = calEventId;
+  if (calHtmlLink) conf.calendar_html_link = calHtmlLink;
   if (presenting_students !== undefined) conf.presenting_students = presenting_students;
   if (attending_investors !== undefined) conf.attending_investors = attending_investors;
   if (status) conf.status = status;
@@ -2245,12 +2506,180 @@ app.put('/api/admin/conferences/:id', authenticateToken, async (req, res) => {
   if (online_ticket_price !== undefined) conf.online_ticket_price = online_ticket_price;
   if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
 
-  // Dispatch WhatsApp & Email notification to Admin via Kapso
   notifyConferencePublished({ conference: conf, adminUser: req.user }).catch(err => console.error('Conference notification dispatch error:', err));
   notifyAllStudents({ type: 'conference', title: `🎤 Conference Scheduled: ${conf.title}`, message: `Event date: ${conf.event_date} (${conf.event_time || '10:00 AM - 04:00 PM'}) at ${conf.venue || 'University Main Auditorium'}.`, link: '/conferences' });
 
-  res.json({ message: 'Conference details published to main site!', conference: conf });
+  res.json({ message: 'Conference details & Google Meet link updated!', conference: conf });
 });
+
+// Admin Route: 1-Click Sync/Re-Generate Google Meet & Google Calendar Event
+app.post('/api/admin/conferences/:id/sync-calendar', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can sync calendar events' });
+  }
+
+  const confId = req.params.id;
+  let targetConf = null;
+
+  if (isDbConnected) {
+    try {
+      const [rows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
+      if (rows.length > 0) targetConf = rows[0];
+    } catch (_) {}
+  }
+  if (!targetConf) {
+    targetConf = mockConferences.find(c => c.id == confId);
+  }
+
+  if (!targetConf) return res.status(404).json({ message: 'Conference not found' });
+
+  const calRes = await scheduleConferenceCalendarEvent({
+    conferenceId: targetConf.id,
+    title: targetConf.title,
+    description: targetConf.description,
+    eventDate: targetConf.event_date,
+    eventTime: targetConf.event_time,
+    venue: targetConf.venue
+  });
+
+  const stream_link = calRes.meetUrl;
+  const calendar_event_id = calRes.calendarEventId;
+  const calendar_html_link = calRes.calendarHtmlLink;
+
+  if (isDbConnected) {
+    try {
+      await db.query(
+        'UPDATE conferences SET stream_link = ?, calendar_event_id = ?, calendar_html_link = ? WHERE id = ?',
+        [stream_link, calendar_event_id, calendar_html_link, confId]
+      );
+      const [rows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
+      return res.json({ message: 'Google Meet link and Calendar event synchronized!', conference: rows[0], calendarResult: calRes });
+    } catch (err) {
+      console.warn('Sync calendar DB update warning:', err.message);
+    }
+  }
+
+  targetConf.stream_link = stream_link;
+  targetConf.calendar_event_id = calendar_event_id;
+  targetConf.calendar_html_link = calendar_html_link;
+  if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
+
+  res.json({ message: 'Google Meet link and Calendar event synchronized!', conference: targetConf, calendarResult: calRes });
+});
+
+// Admin Route: Test Conference Day Reminder Notification Immediately
+app.post('/api/admin/conferences/:id/test-reminder', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can trigger reminders' });
+  }
+
+  const confId = req.params.id;
+  let targetConf = null;
+
+  if (isDbConnected) {
+    try {
+      const [rows] = await db.query('SELECT * FROM conferences WHERE id = ?', [confId]);
+      if (rows.length > 0) targetConf = rows[0];
+    } catch (_) {}
+  }
+  if (!targetConf) {
+    targetConf = mockConferences.find(c => c.id == confId);
+  }
+
+  if (!targetConf) return res.status(404).json({ message: 'Conference not found' });
+
+  // Fire reminder notification
+  await notifyConferenceDayReminder({
+    conference: targetConf,
+    adminPhone: process.env.ADMIN_WHATSAPP_NUMBER || '+923482727605',
+    adminEmail: process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com'
+  });
+
+  // Create In-Portal Notification
+  await createPortalNotification({
+    roleTarget: 'admin',
+    type: 'conference_reminder',
+    title: `🔔 Today's Conference: ${targetConf.title}`,
+    message: `Scheduled at ${targetConf.event_time || '10:00 AM - 04:00 PM'} (${targetConf.venue || 'Main Auditorium'}). Google Meet: ${targetConf.stream_link}`,
+    link: '/admin/conferences'
+  });
+
+  res.json({ message: 'Conference day reminder dispatched via WhatsApp, Email & Portal Notification!', conference: targetConf });
+});
+
+// Check All Conferences For Today and Send Reminders (Callable by Cron or Admin UI)
+app.post('/api/admin/conferences/check-reminders', authenticateToken, async (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  let confs = [];
+
+  if (isDbConnected) {
+    try {
+      const [rows] = await db.query('SELECT * FROM conferences WHERE event_date = ? OR event_date LIKE ?', [today, `%${today}%`]);
+      confs = rows;
+    } catch (_) {}
+  }
+  if (confs.length === 0) {
+    confs = mockConferences.filter(c => c.event_date === today || (c.event_date && c.event_date.includes(today)));
+  }
+
+  const results = [];
+  for (const conf of confs) {
+    await notifyConferenceDayReminder({
+      conference: conf,
+      adminPhone: process.env.ADMIN_WHATSAPP_NUMBER || '+923482727605',
+      adminEmail: process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com'
+    });
+
+    await createPortalNotification({
+      roleTarget: 'admin',
+      type: 'conference_reminder',
+      title: `🔔 Today's Conference: ${conf.title}`,
+      message: `Scheduled at ${conf.event_time || '10:00 AM - 04:00 PM'}. Google Meet: ${conf.stream_link}`,
+      link: '/admin/conferences'
+    });
+
+    results.push({ conferenceId: conf.id, title: conf.title, status: 'reminder_dispatched' });
+  }
+
+  res.json({ message: `Scanned conferences. Sent ${results.length} reminder(s) for today (${today}).`, count: results.length, reminders: results });
+});
+
+// Background Automatic Daily Scheduler for Conference Reminders (Runs every hour)
+const sentRemindersCache = new Set();
+setInterval(async () => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    let confs = [];
+    if (isDbConnected) {
+      const [rows] = await db.query('SELECT * FROM conferences WHERE event_date = ?', [today]);
+      confs = rows;
+    } else {
+      confs = mockConferences.filter(c => c.event_date === today);
+    }
+
+    for (const conf of confs) {
+      const cacheKey = `${conf.id}_${today}`;
+      if (!sentRemindersCache.has(cacheKey)) {
+        sentRemindersCache.add(cacheKey);
+        console.log(`🔔 [AUTO SCHEDULER] Dispatching conference day reminder for: ${conf.title}`);
+        await notifyConferenceDayReminder({
+          conference: conf,
+          adminPhone: process.env.ADMIN_WHATSAPP_NUMBER || '+923482727605',
+          adminEmail: process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com'
+        });
+        await createPortalNotification({
+          roleTarget: 'admin',
+          type: 'conference_reminder',
+          title: `🔔 Today's Conference: ${conf.title}`,
+          message: `Scheduled for today at ${conf.event_time || '10:00 AM - 04:00 PM'}. Google Meet: ${conf.stream_link}`,
+          link: '/admin/conferences'
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Background reminder scheduler error:', err.message);
+  }
+}, 60 * 60 * 1000); // Hourly check
 
 // Fallback PUT /api/conferences/:id route
 app.put('/api/conferences/:id', authenticateToken, async (req, res) => {
@@ -2430,9 +2859,9 @@ app.post(['/api/tickets', '/api/tickets/book'], authenticateToken, async (req, r
       }
 
       const [result] = await db.query(
-        `INSERT INTO tickets (user_id, user_name, conference_id, ticket_type, amount_paid, ticket_code, seat_number, event_date, event_time, venue, payment_status, booked_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Admin Verification', ?)`,
-        [req.user.id, attendee_name || req.user.full_name, confId, type, finalAmount, ticket_code, seat_number, event_date, event_time, venue, booked_at]
+        `INSERT INTO tickets (user_id, user_name, user_email, conference_id, ticket_type, amount_paid, ticket_code, seat_number, event_date, event_time, venue, receipt_url, sender_bank, transaction_id, sender_mobile, payment_status, booked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Admin Verification', ?)`,
+        [req.user.id, attendee_name || req.user.full_name, attendee_email || req.user.email, confId, type, finalAmount, ticket_code, seat_number, event_date, event_time, venue, cleanReceipt || '', sender_bank || 'HBL Mobile App', transaction_id || `TRX-${Math.floor(100000 + Math.random() * 900000)}`, sender_mobile || '0348-2727605', booked_at]
       );
 
       const newTicket = {
@@ -2540,13 +2969,29 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
   }
 
   const ticketId = req.params.id;
-  const { seat_number, stream_link, venue, event_date, event_time } = req.body;
+  let { seat_number, stream_link, venue, event_date, event_time } = req.body;
 
   if (isDbConnected) {
     try {
+      const [currentTickets] = await db.query('SELECT * FROM tickets WHERE id = ?', [ticketId]);
+      if (currentTickets.length === 0) return res.status(404).json({ message: 'Ticket not found' });
+      const currentTicket = currentTickets[0];
+
+      let confObj = null;
+      try {
+        const [confs] = await db.query('SELECT * FROM conferences WHERE id = ?', [currentTicket.conference_id]);
+        if (confs.length > 0) confObj = confs[0];
+      } catch (_) {}
+
+      const finalStreamLink = stream_link || currentTicket.stream_link || confObj?.stream_link || generateDeterministicMeetCode(currentTicket.conference_id, confObj?.title || 'leads_conf');
+      const finalVenue = venue || currentTicket.venue || confObj?.venue || 'Lahore Leads University Main Auditorium';
+      const finalDate = event_date || currentTicket.event_date || confObj?.event_date || '2026-09-15';
+      const finalTime = event_time || currentTicket.event_time || confObj?.event_time || '10:00 AM - 04:00 PM';
+      const finalSeat = seat_number || currentTicket.seat_number || 'Seat Row A - Reserved';
+
       await db.query(
-        'UPDATE tickets SET payment_status = "Verified & Issued", seat_number = COALESCE(?, seat_number), stream_link = COALESCE(?, stream_link), venue = COALESCE(?, venue), event_date = COALESCE(?, event_date), event_time = COALESCE(?, event_time) WHERE id = ?',
-        [seat_number, stream_link, venue, event_date, event_time, ticketId]
+        'UPDATE tickets SET payment_status = "Verified & Issued", seat_number = ?, stream_link = ?, venue = ?, event_date = ?, event_time = ? WHERE id = ?',
+        [finalSeat, finalStreamLink, finalVenue, finalDate, finalTime, ticketId]
       );
       const [rows] = await db.query('SELECT * FROM tickets WHERE id = ?', [ticketId]);
       const verifiedTicket = rows[0];
@@ -2567,25 +3012,27 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
           console.warn('Auto reader grant notice:', rErr.message);
         }
 
-        // Fetch conference object for details
-        let confObj = null;
-        try {
-          const [confs] = await db.query('SELECT * FROM conferences WHERE id = ?', [verifiedTicket.conference_id]);
-          if (confs.length > 0) confObj = confs[0];
-        } catch (_) {}
+        let attendeeEmail = verifiedTicket.user_email;
+        if (!attendeeEmail && verifiedTicket.user_id) {
+          try {
+            const [u] = await db.query('SELECT email FROM users WHERE id = ?', [verifiedTicket.user_id]);
+            if (u.length > 0 && u[0].email) attendeeEmail = u[0].email;
+          } catch (_) {}
+        }
+        if (!attendeeEmail) attendeeEmail = process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
 
-        // Send Student WhatsApp and Email Confirmation
+        // Send Student WhatsApp and Email Confirmation with Google Meet Link
         notifyTicketVerifiedAndIssued({
           ticket: verifiedTicket,
           conference: confObj,
           attendeeName: verifiedTicket.user_name,
-          attendeeEmail: verifiedTicket.user_email,
+          attendeeEmail,
           attendeeMobile: verifiedTicket.sender_mobile,
-          seatNumber: seat_number || verifiedTicket.seat_number,
-          streamLink: stream_link || verifiedTicket.stream_link,
-          venue: venue || verifiedTicket.venue,
-          eventDate: event_date || verifiedTicket.event_date,
-          eventTime: event_time || verifiedTicket.event_time
+          seatNumber: finalSeat,
+          streamLink: finalStreamLink,
+          venue: finalVenue,
+          eventDate: finalDate,
+          eventTime: finalTime
         }).catch(err => console.error('Error dispatching ticket verified notification:', err));
 
         // Notify Delegate in Portal
@@ -2593,12 +3040,12 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
           userId: verifiedTicket.user_id,
           type: 'ticket',
           title: '🎟️ Conference Pass Verified & Activated!',
-          message: `Your pass for “${verifiedTicket.conference_title || confObj?.title || 'Conference'}” is verified! ${verifiedTicket.ticket_type === 'onsite' ? `Seat: ${seat_number || verifiedTicket.seat_number}` : `Stream Link: ${stream_link || verifiedTicket.stream_link || 'Live Virtual Access'}`}.`,
+          message: `Your pass for “${verifiedTicket.conference_title || confObj?.title || 'Conference'}” is verified! Google Meet Virtual Access: ${finalStreamLink}. ${verifiedTicket.ticket_type === 'onsite' ? `Seat: ${finalSeat}` : ''}`,
           link: '/student'
         });
       }
 
-      return res.json({ message: 'Ticket pass verified and issued to delegate!', ticket: verifiedTicket });
+      return res.json({ message: 'Ticket pass verified and issued to delegate with Google Meet link!', ticket: verifiedTicket });
     } catch (err) {
       console.error('DB operation error:', err.message);
     }
@@ -2606,21 +3053,27 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
 
   const ticket = mockTickets.find(t => t.id == ticketId);
   if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+  const confObj = mockConferences.find(c => c.id == ticket.conference_id) || { title: ticket.conference_title };
+  const finalStreamLink = stream_link || ticket.stream_link || confObj.stream_link || generateDeterministicMeetCode(ticket.conference_id, confObj.title);
+
   ticket.payment_status = 'Verified & Issued';
-  if (seat_number) ticket.seat_number = seat_number;
-  if (venue) ticket.venue = venue;
-  if (stream_link) ticket.stream_link = stream_link;
-  if (event_date) ticket.event_date = event_date;
-  if (event_time) ticket.event_time = event_time;
+  ticket.seat_number = seat_number || ticket.seat_number || 'Seat Row A - Reserved';
+  ticket.venue = venue || ticket.venue || confObj.venue || 'Lahore Leads University';
+  ticket.stream_link = finalStreamLink;
+  ticket.event_date = event_date || ticket.event_date || confObj.event_date;
+  ticket.event_time = event_time || ticket.event_time || confObj.event_time;
+
+  const memUser = mockUsers.find(u => u.id == ticket.user_id);
+  const attendeeEmail = ticket.user_email || memUser?.email || process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
 
   notifyTicketVerifiedAndIssued({
     ticket,
-    conference: { title: ticket.conference_title, venue: ticket.venue, event_date: ticket.event_date, event_time: ticket.event_time },
+    conference: confObj,
     attendeeName: ticket.user_name,
-    attendeeEmail: ticket.user_email,
+    attendeeEmail,
     attendeeMobile: ticket.sender_mobile,
     seatNumber: ticket.seat_number,
-    streamLink: ticket.stream_link,
+    streamLink: finalStreamLink,
     venue: ticket.venue,
     eventDate: ticket.event_date,
     eventTime: ticket.event_time
@@ -2630,11 +3083,11 @@ app.put('/api/admin/tickets/:id/verify', authenticateToken, async (req, res) => 
     userId: ticket.user_id,
     type: 'ticket',
     title: '🎟️ Conference Pass Verified & Activated!',
-    message: `Your pass for “${ticket.conference_title || 'Conference'}” is verified! ${ticket.ticket_type === 'onsite' ? `Seat: ${ticket.seat_number}` : `Stream Link: ${ticket.stream_link || 'Live Virtual Access'}`}.`,
+    message: `Your pass for “${ticket.conference_title || confObj.title || 'Conference'}” is verified! Google Meet: ${finalStreamLink}`,
     link: '/student'
   });
 
-  res.json({ message: 'Ticket pass verified and issued to delegate!', ticket });
+  res.json({ message: 'Ticket pass verified and issued to delegate with Google Meet link!', ticket });
 });
 
 // Get Tickets for User
@@ -3137,6 +3590,198 @@ app.delete('/api/admin/notifications/history', authenticateToken, (req, res) => 
   res.json({ message: 'Notification audit history cleared successfully' });
 });
 
+// ================= STUDENT & ADMIN TWO-WAY DIRECT INQUIRY & SUPPORT DESK =================
+
+// 1. Get Inquiries (Admin sees all, Student sees their own)
+app.get('/api/inquiries', authenticateToken, async (req, res) => {
+  if (isDbConnected) {
+    try {
+      if (req.user.role === 'admin') {
+        const [rows] = await db.query('SELECT * FROM inquiries ORDER BY id DESC');
+        return res.json(rows);
+      } else {
+        const [rows] = await db.query('SELECT * FROM inquiries WHERE user_id = ? OR user_email = ? ORDER BY id DESC', [req.user.id, req.user.email]);
+        return res.json(rows);
+      }
+    } catch (err) {
+      console.warn('DB inquiry fetch fallback:', err.message);
+    }
+  }
+
+  if (req.user.role === 'admin') {
+    return res.json(mockInquiries);
+  } else {
+    const userInquiries = mockInquiries.filter(i => i.user_id == req.user.id || i.user_email === req.user.email);
+    return res.json(userInquiries);
+  }
+});
+
+// 2. Student Submits New Inquiry / Query to Admin
+app.post('/api/inquiries', authenticateToken, async (req, res) => {
+  const { subject, category, message, sender_mobile } = req.body;
+  if (!subject || !message) {
+    return res.status(400).json({ message: 'Subject and message are required' });
+  }
+
+  const studentUser = req.user;
+  const inquiryData = {
+    user_id: studentUser.id,
+    user_name: studentUser.full_name || 'Student Scholar',
+    user_email: studentUser.email || 'bazighminhas1@gmail.com',
+    sender_mobile: sender_mobile || studentUser.mobile || '0348-2727605',
+    subject,
+    category: category || 'General Support',
+    message,
+    admin_reply: null,
+    replied_by: null,
+    replied_at: null,
+    status: 'Pending',
+    created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+  };
+
+  let savedInquiry = { id: Date.now(), ...inquiryData };
+
+  if (isDbConnected) {
+    try {
+      const [result] = await db.query(
+        `INSERT INTO inquiries (user_id, user_name, user_email, sender_mobile, subject, category, message, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', NOW())`,
+        [inquiryData.user_id, inquiryData.user_name, inquiryData.user_email, inquiryData.sender_mobile, inquiryData.subject, inquiryData.category, inquiryData.message]
+      );
+      savedInquiry.id = result.insertId;
+    } catch (err) {
+      console.warn('DB inquiry insert fallback:', err.message);
+    }
+  }
+
+  mockInquiries.unshift(savedInquiry);
+  if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
+
+  // 1. Create in-portal notifications
+  createPortalNotification({
+    roleTarget: 'admin',
+    type: 'inquiry',
+    title: '💬 New Student Support Inquiry',
+    message: `${savedInquiry.user_name} asked: "${savedInquiry.subject}" (${savedInquiry.category}).`,
+    link: '/admin/inquiries'
+  });
+
+  createPortalNotification({
+    userId: studentUser.id,
+    type: 'inquiry',
+    title: '✅ Inquiry Submitted',
+    message: `Your inquiry "${savedInquiry.subject}" has been received. Admin response will be sent to your Gmail.`,
+    link: '/student'
+  });
+
+  // 2. Dispatch WhatsApp + Email to Admin & Acknowledgment Email to Student
+  notifyStudentInquiryToAdmin({
+    student: studentUser,
+    inquiry: savedInquiry
+  }).catch(err => console.error('Inquiry dispatch error:', err));
+
+  // 3. Save official inquiry metadata record to Google Drive
+  uploadStudentInquiryPackage({
+    student: studentUser,
+    inquiry: savedInquiry
+  }).catch(e => console.warn('⚠️ [GOOGLE DRIVE] Inquiry record upload notice:', e.message));
+
+  res.status(201).json({
+    message: 'Inquiry submitted successfully! ORIC Directorate has been notified via WhatsApp & Email.',
+    inquiry: savedInquiry
+  });
+});
+
+// 3. Admin Replies to Student Inquiry
+app.post('/api/inquiries/:id/reply', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only Admin can reply to inquiries' });
+  }
+
+  const inquiryId = req.params.id;
+  const { reply } = req.body;
+  if (!reply) return res.status(400).json({ message: 'Reply text is required' });
+
+  const adminName = req.user.full_name || 'ORIC Directorate Administrator';
+  const replyTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+  let updatedInquiry = null;
+
+  if (isDbConnected) {
+    try {
+      await db.query(
+        `UPDATE inquiries
+         SET admin_reply = ?,
+             replied_by = ?,
+             replied_at = NOW(),
+             status = 'Replied'
+         WHERE id = ?`,
+        [reply, adminName, inquiryId]
+      );
+      const [rows] = await db.query('SELECT * FROM inquiries WHERE id = ?', [inquiryId]);
+      if (rows.length > 0) updatedInquiry = rows[0];
+    } catch (err) {
+      console.warn('DB inquiry reply error:', err.message);
+    }
+  }
+
+  const memInquiry = mockInquiries.find(i => i.id == inquiryId);
+  if (memInquiry) {
+    memInquiry.admin_reply = reply;
+    memInquiry.replied_by = adminName;
+    memInquiry.replied_at = replyTime;
+    memInquiry.status = 'Replied';
+    if (typeof savePersistentDataStore === 'function') savePersistentDataStore();
+    if (!updatedInquiry) updatedInquiry = memInquiry;
+  }
+
+  if (!updatedInquiry) return res.status(404).json({ message: 'Inquiry not found' });
+
+  // 1. Resolve student email from users table or inquiry record
+  let studentEmail = updatedInquiry.user_email;
+  let studentName = updatedInquiry.user_name;
+  if (updatedInquiry.user_id && isDbConnected) {
+    try {
+      const [users] = await db.query('SELECT full_name, email FROM users WHERE id = ?', [updatedInquiry.user_id]);
+      if (users.length > 0) {
+        studentEmail = users[0].email || studentEmail;
+        studentName = users[0].full_name || studentName;
+      }
+    } catch (_) {}
+  }
+  if (!studentEmail) studentEmail = process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+
+  // 2. Create in-portal notification for student
+  createPortalNotification({
+    userId: updatedInquiry.user_id,
+    type: 'inquiry_reply',
+    title: '📬 Admin Response to Your Inquiry',
+    message: `ORIC Admin replied to "${updatedInquiry.subject}": ${reply.substring(0, 80)}...`,
+    link: '/student'
+  });
+
+  // 3. Dispatch official Email to student's Gmail with Admin's response
+  notifyAdminReplyToStudent({
+    student: { full_name: studentName, email: studentEmail, id: updatedInquiry.user_id },
+    inquiry: updatedInquiry,
+    replyText: reply,
+    adminName
+  }).catch(err => console.error('Admin reply email dispatch error:', err));
+
+  // 4. Update inquiry record in Google Drive
+  uploadStudentInquiryPackage({
+    student: { full_name: studentName, email: studentEmail, id: updatedInquiry.user_id },
+    inquiry: updatedInquiry,
+    replyText: reply,
+    adminName
+  }).catch(e => console.warn('⚠️ [GOOGLE DRIVE] Inquiry update notice:', e.message));
+
+  res.json({
+    message: `Official response successfully dispatched to student's Gmail (${studentEmail}) and portal!`,
+    inquiry: updatedInquiry
+  });
+});
+
 // ================= ADMIN NOTIFICATIONS AUDIT LOG (KAPSO / TWILIO / EMAIL) =================
 
 // Get Notifications Log
@@ -3283,8 +3928,73 @@ app.post('/api/admin/drive/backup', authenticateToken, async (req, res) => {
       ...backupResult
     });
   } catch (err) {
-    console.error('Database Backup Error:', err);
+    console.error('Database backup error:', err.message);
     res.status(500).json({ message: 'Failed to backup database to Google Drive', error: err.message });
+  }
+});
+// Student Notification Settings & Live Gmail Sync Connection
+app.post('/api/student/notifications/connect-email', async (req, res) => {
+  try {
+    let studentUser = null;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+      try {
+        studentUser = jwt.verify(token, JWT_SECRET);
+      } catch (_) {}
+    }
+
+    const { email, full_name, user_id } = req.body || {};
+    const targetEmail = email || studentUser?.email || process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com';
+    const targetName = full_name || studentUser?.full_name || 'Student Scholar';
+    const targetId = user_id || studentUser?.id || null;
+
+    // Persist email in users database so all future Admin notifications route here
+    if (targetId) {
+      if (isDbConnected) {
+        try {
+          await db.query('UPDATE users SET email = ? WHERE id = ?', [targetEmail, targetId]);
+        } catch (_) {}
+      }
+      const memUser = mockUsers.find(u => u.id == targetId);
+      if (memUser) memUser.email = targetEmail;
+    }
+
+    // Send instant test & confirmation email to student's Gmail
+    let emailResult = null;
+    try {
+      emailResult = await notifyStudentEmailConnectedTest({
+        student: { id: targetId, full_name: targetName, email: targetEmail },
+        adminEmail: process.env.ADMIN_EMAIL || 'bazighminhas1@gmail.com'
+      });
+    } catch (mailErr) {
+      console.warn('⚠️ [SMTP SEND WARNING]:', mailErr.message);
+    }
+
+    // Also record an in-portal notification
+    if (targetId) {
+      await createPortalNotification({
+        userId: targetId,
+        type: 'system',
+        title: '🔔 Gmail Sync Activated',
+        message: `Your Gmail (${targetEmail}) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.`,
+        link: '/student'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Gmail alerts successfully activated! A confirmation email has been sent to ${targetEmail}.`,
+      connectedEmail: targetEmail,
+      emailStatus: emailResult?.status || 'sent'
+    });
+  } catch (err) {
+    console.error('Student email sync error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not connect email notification service',
+      error: err.message
+    });
   }
 });
 

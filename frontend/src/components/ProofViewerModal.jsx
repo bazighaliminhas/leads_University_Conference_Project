@@ -18,7 +18,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 
-const BACKEND_BASE = 'http://localhost:5000';
+const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
 function normalizeUrl(rawUrl) {
   if (!rawUrl) return '';
@@ -55,6 +55,8 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
   const normalized = normalizeUrl(rawUrl);
   const driveFileId = extractGoogleDriveFileId(normalized);
 
+  const isDriveDoc = Boolean(driveFileId || normalized.includes('drive.google.com'));
+
   const isPdf = Boolean(
     normalized && (
       normalized.startsWith('data:application/pdf') ||
@@ -65,16 +67,14 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
     )
   );
 
+  const proxyUrl = driveFileId ? `${BACKEND_BASE}/api/drive-proxy/${driveFileId}` : null;
+  const driveEmbedUrl = driveFileId ? `https://drive.google.com/file/d/${driveFileId}/preview` : null;
+
   // Candidate sources for Google Drive images in order of resilience:
-  // 1. Backend proxy route (zero CORS / zero auth barriers)
-  // 2. Google lh3 CDN
-  // 3. Drive thumbnail
-  // 4. Raw normalized URL
   const imageSources = driveFileId ? [
-    `${BACKEND_BASE}/api/drive-proxy/${driveFileId}`,
-    `https://lh3.googleusercontent.com/d/${driveFileId}`,
+    proxyUrl,
     `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w2000`,
-    `https://drive.google.com/uc?export=view&id=${driveFileId}`,
+    `https://lh3.googleusercontent.com/d/${driveFileId}`,
     normalized
   ] : [normalized];
 
@@ -98,9 +98,9 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
       setImgAttemptIndex(0);
       setZoomLevel(1);
       setCopiedTrx(false);
-      setViewMode(hasImage || isPdf ? 'document' : 'ledger');
+      setViewMode(hasImage || isPdf || isDriveDoc ? 'document' : 'ledger');
     }
-  }, [isOpen, proofData, rawUrl]);
+  }, [isOpen, proofData, rawUrl, isDriveDoc]);
 
   // 2. CONDITIONAL RETURN ONLY AFTER ALL HOOKS
   if (!isOpen || !proofData) return null;
@@ -118,12 +118,10 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
     ? `https://drive.google.com/file/d/${driveFileId}/view?usp=sharing`
     : (normalized.startsWith('https://drive.google.com') ? normalized : null);
 
-  const googleDrivePreviewUrl = driveFileId
-    ? `https://drive.google.com/file/d/${driveFileId}/preview`
-    : (normalized.startsWith('https://drive.google.com') ? normalized : null);
+  const googleDrivePreviewUrl = driveEmbedUrl || (normalized.startsWith('https://drive.google.com') ? normalized : null);
 
   const displayPdfUrl = (driveFileId && isPdf)
-    ? `https://drive.google.com/file/d/${driveFileId}/preview`
+    ? (driveEmbedUrl || `${BACKEND_BASE}/api/drive-proxy/${driveFileId}`)
     : normalized;
 
   const handleImageLoadError = () => {
@@ -230,23 +228,9 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {isPdf ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
-              <span>{isPdf ? 'PDF Slip' : 'Slip Image'}</span>
+              {isDriveDoc ? <FolderOpen className="w-3.5 h-3.5 text-blue-400" /> : isPdf ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
+              <span>{isDriveDoc ? 'Google Drive Slip' : isPdf ? 'PDF Slip' : 'Slip Image'}</span>
             </button>
-
-            {driveFileId && (
-              <button
-                onClick={() => setViewMode('drive_preview')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  viewMode === 'drive_preview'
-                    ? 'bg-[#0A192F] text-amber-400 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span>Drive Preview</span>
-              </button>
-            )}
 
             <button
               onClick={() => setViewMode('ledger')}
@@ -263,7 +247,7 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
 
           {/* Action Tools */}
           <div className="flex items-center gap-2 justify-end flex-wrap">
-            {viewMode === 'document' && hasImage && !imageError && (
+            {viewMode === 'document' && hasImage && !imageError && !driveFileId && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={handleZoomIn}
@@ -330,19 +314,19 @@ export const ProofViewerModal = ({ isOpen, onClose, proofData }) => {
 
         {/* Main Canvas */}
         <div className="flex-1 overflow-auto bg-slate-900/5 rounded-2xl border border-slate-200 p-2 sm:p-4 flex items-center justify-center min-h-[360px] max-h-[64vh]">
-          {viewMode === 'drive_preview' && googleDrivePreviewUrl ? (
-            /* Google Drive Embedded Preview */
+          {viewMode === 'document' && isDriveDoc && googleDrivePreviewUrl ? (
+            /* Google Drive Embedded Preview for uploaded slips */
             <div className="w-full h-[58vh] flex flex-col rounded-xl overflow-hidden shadow-inner bg-white border border-slate-300 relative">
-              <div className="bg-slate-900 text-white px-3 py-2 flex items-center justify-between text-xs">
+              <div className="bg-slate-900 text-white px-3.5 py-2 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">DRIVE</span>
-                  <span className="font-semibold truncate max-w-[200px] sm:max-w-xs">{studentName} - Google Drive File</span>
+                  <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black font-mono">GOOGLE DRIVE</span>
+                  <span className="font-semibold truncate max-w-[200px] sm:max-w-xs">{studentName} - Uploaded Payment Slip</span>
                 </div>
                 <button
                   onClick={handleOpenDriveDirect}
                   className="text-amber-400 hover:text-amber-300 font-bold text-[11px] flex items-center gap-1"
                 >
-                  <ExternalLink className="w-3 h-3" /> Open in Drive Tab
+                  <ExternalLink className="w-3 h-3" /> Open in Google Drive Tab
                 </button>
               </div>
 

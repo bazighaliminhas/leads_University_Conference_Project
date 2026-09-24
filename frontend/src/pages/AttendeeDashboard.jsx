@@ -268,25 +268,35 @@ export const AttendeeDashboard = ({ user, conferences = [], tickets = [], onBook
                     <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 font-medium flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>
-                        Payment slip under review by ORIC Admin. Once approved, your allocated seat / stream link and valid QR pass will unlock here.
+                        Payment slip under review by ORIC Admin. Once approved, your allocated seat / Google Meet link and valid QR pass will unlock here.
                       </span>
                     </div>
                   ) : (
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-wrap gap-2 pt-2">
                       <button
                         onClick={() => handlePrintTicket(t)}
-                        className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5"
+                        className="flex-1 min-w-[110px] py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5"
                       >
-                        <Printer className="w-4 h-4" /> Print Ticket Pass
+                        <Printer className="w-4 h-4" /> Print Pass
                       </button>
-                      {t.ticket_type === 'online' && (
+                      <a
+                        href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(t.conference_title || selectedConf?.title || 'Lahore Leads Conference')}&dates=${(t.event_date || selectedConf?.event_date || '2026-09-15').replace(/[^0-9]/g, '') || '20260915'}T050000Z/${(t.event_date || selectedConf?.event_date || '2026-09-15').replace(/[^0-9]/g, '') || '20260915'}T110000Z&details=${encodeURIComponent('Lahore Leads University Academic Conference\nOfficial E-Pass Code: ' + t.ticket_code + '\nGoogle Meet Room: ' + (t.stream_link || selectedConf?.stream_link || ''))}&location=${encodeURIComponent(t.venue || selectedConf?.venue || 'Lahore Leads University')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1"
+                        title="Add to Google Calendar (1-Click)"
+                      >
+                        <Calendar className="w-4 h-4 text-amber-700" />
+                        <span className="hidden sm:inline">Google Calendar</span>
+                      </a>
+                      {t.stream_link && (
                         <a
-                          href={t.stream_link || 'https://meet.google.com/xyz-demo-stream'}
+                          href={t.stream_link}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex-1 py-2.5 bg-[#0A192F] hover:bg-[#002B49] text-amber-400 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5"
+                          className="flex-1 min-w-[130px] py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow"
                         >
-                          <ExternalLink className="w-4 h-4" /> Open Live Stream
+                          <Video className="w-4 h-4 text-white" /> Join Google Meet
                         </a>
                       )}
                     </div>

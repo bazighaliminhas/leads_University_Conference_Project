@@ -46,7 +46,8 @@ import {
   Lock,
   Settings,
   HardDrive,
-  Save
+  Save,
+  Video
 } from 'lucide-react';
 import { TierBadge } from '../components/TierBadge';
 import { ProofViewerModal } from '../components/ProofViewerModal';
@@ -76,6 +77,7 @@ export const AdminDashboard = ({
     if (location.pathname.includes('/tickets')) return 'tickets';
     if (location.pathname.includes('/readers')) return 'readers';
     if (location.pathname.includes('/investors')) return 'investors';
+    if (location.pathname.includes('/inquiries')) return 'inquiries';
     if (location.pathname.includes('/notifications')) return 'notifications';
     if (location.pathname.includes('/settings')) return 'settings';
     if (location.pathname.includes('/users')) return 'users';
@@ -96,6 +98,7 @@ export const AdminDashboard = ({
     else if (tab === 'tickets') navigate('/admin/tickets');
     else if (tab === 'readers') navigate('/admin/readers');
     else if (tab === 'investors') navigate('/admin/investors');
+    else if (tab === 'inquiries') navigate('/admin/inquiries');
     else if (tab === 'notifications') navigate('/admin/notifications');
     else if (tab === 'settings') navigate('/admin/settings');
     else if (tab === 'users') navigate('/admin/users');
@@ -454,8 +457,9 @@ export const AdminDashboard = ({
     try {
       setVerifyingTicketId(ticket.id);
       const token = localStorage.getItem('univ_token');
-      const seat = allocatingSeat[ticket.id] || ticket.seat_number || (ticket.ticket_type === 'onsite' ? 'Auditorium Row A - Seat #15' : 'Virtual VIP HD Stream Access');
-      const link = allocatingLink[ticket.id] || ticket.stream_link || 'https://meet.google.com/conf-2026';
+      const conf = conferences.find(c => c.id == ticket.conference_id) || conferences[0];
+      const seat = allocatingSeat[ticket.id] !== undefined ? allocatingSeat[ticket.id] : (ticket.seat_number || 'Auditorium Row A - Seat #15');
+      const link = allocatingLink[ticket.id] !== undefined ? allocatingLink[ticket.id] : (ticket.stream_link || conf?.stream_link || 'https://meet.google.com/leads-summit-2026');
 
       const res = await axios.put(`${API_BASE}/admin/tickets/${ticket.id}/verify`, {
         seat_number: seat,
@@ -465,7 +469,7 @@ export const AdminDashboard = ({
       });
 
       setTicketsList(prev => prev.map(t => t.id === ticket.id ? (res.data.ticket || { ...t, payment_status: 'Verified & Issued', seat_number: seat, stream_link: link }) : t));
-      setTicketActionMsg(`✓ Delegate Pass for '${ticket.user_name}' verified and issued successfully! Seat / Link: ${seat}`);
+      setTicketActionMsg(`✓ Pass for '${ticket.user_name}' verified & issued! Google Meet: ${link}`);
       setTimeout(() => setTicketActionMsg(''), 6000);
     } catch (err) {
       alert(err.response?.data?.message || 'Error verifying ticket pass');
@@ -522,10 +526,61 @@ export const AdminDashboard = ({
     }
   };
 
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+  const [testingReminder, setTestingReminder] = useState(false);
+  const [confActionMsg, setConfActionMsg] = useState('');
+
+  const handleSyncCalendar = async () => {
+    try {
+      setSyncingCalendar(true);
+      setConfActionMsg('');
+      const token = localStorage.getItem('univ_token');
+      const confId = activeConf?.id || 1;
+      const res = await axios.post(`${API_BASE}/admin/conferences/${confId}/sync-calendar`, {}, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.data?.conference) {
+        setConfData(prev => ({
+          ...prev,
+          stream_link: res.data.conference.stream_link,
+          calendar_html_link: res.data.conference.calendar_html_link
+        }));
+        setConfActionMsg(`✓ Google Meet link generated & Google Calendar synchronized (${res.data.conference.stream_link})`);
+      } else {
+        setConfActionMsg('✓ Google Meet & Calendar synchronized successfully.');
+      }
+    } catch (err) {
+      setConfActionMsg(`⚠️ Sync notice: ${err.response?.data?.message || 'Generated Google Meet link directly.'}`);
+    } finally {
+      setSyncingCalendar(false);
+      setTimeout(() => setConfActionMsg(''), 7000);
+    }
+  };
+
+  const handleTestReminder = async () => {
+    try {
+      setTestingReminder(true);
+      setConfActionMsg('');
+      const token = localStorage.getItem('univ_token');
+      const confId = activeConf?.id || 1;
+      await axios.post(`${API_BASE}/admin/conferences/${confId}/test-reminder`, {}, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setConfActionMsg('🚀 Conference day reminder dispatched! Check Admin WhatsApp (+92 348 2727605) & Email (bazighminhas1@gmail.com).');
+      if (typeof fetchNotificationLogs === 'function') fetchNotificationLogs();
+    } catch (err) {
+      setConfActionMsg('⚠️ Could not trigger conference reminder.');
+    } finally {
+      setTestingReminder(false);
+      setTimeout(() => setConfActionMsg(''), 7000);
+    }
+  };
+
   const handleConferenceSubmit = (e) => {
     e.preventDefault();
     onUpdateConference(activeConf?.id || 1, confData);
-    alert('✅ University Conference details and schedule published live!');
+    setConfActionMsg('✅ University Conference details, Google Meet link & schedule saved!');
+    setTimeout(() => setConfActionMsg(''), 6000);
   };
 
   // Investors Full CRUD State
@@ -629,6 +684,63 @@ export const AdminDashboard = ({
       fetchInvestorsList();
     } catch (err) {
       alert('Error deleting investor');
+    }
+  };
+
+  // Student Inquiries Management State
+  const [inquiriesList, setInquiriesList] = useState([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [inquiryFilter, setInquiryFilter] = useState('all'); // 'all' | 'pending' | 'replied'
+  const [inquirySearch, setInquirySearch] = useState('');
+  const [replyTextMap, setReplyTextMap] = useState({});
+  const [replyingInquiryId, setReplyingInquiryId] = useState(null);
+  const [inquiryActionMsg, setInquiryActionMsg] = useState('');
+
+  const fetchAdminInquiries = async () => {
+    try {
+      setLoadingInquiries(true);
+      const token = localStorage.getItem('univ_token');
+      const res = await axios.get(`${API_BASE}/inquiries`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setInquiriesList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching inquiries in AdminDashboard:', err);
+    } finally {
+      setLoadingInquiries(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminInquiries();
+  }, []);
+
+  const handleSendAdminReply = async (inquiry) => {
+    const text = replyTextMap[inquiry.id];
+    if (!text || !text.trim()) {
+      alert('Please enter a response message to send to the student.');
+      return;
+    }
+
+    try {
+      setReplyingInquiryId(inquiry.id);
+      setInquiryActionMsg('');
+      const token = localStorage.getItem('univ_token');
+      await axios.post(`${API_BASE}/inquiries/${inquiry.id}/reply`, {
+        reply_text: text.trim(),
+        admin_name: 'Lahore Leads University ORIC Desk'
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      setInquiryActionMsg(`✓ Response dispatched to ${inquiry.student_name} (${inquiry.student_email || 'Gmail'})! Email sent and conversation archived in Google Drive.`);
+      setReplyTextMap(prev => ({ ...prev, [inquiry.id]: '' }));
+      fetchAdminInquiries();
+      setTimeout(() => setInquiryActionMsg(''), 8000);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error sending reply to student');
+    } finally {
+      setReplyingInquiryId(null);
     }
   };
 
@@ -807,6 +919,23 @@ export const AdminDashboard = ({
           >
             <Users className="w-4 h-4" />
             <span>Investors ({investorList.length || 3})</span>
+          </button>
+
+          <button
+            onClick={() => switchTab('inquiries')}
+            className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${
+              activeSubTab === 'inquiries'
+                ? 'bg-[#0A192F] text-amber-400 shadow-sm font-black'
+                : 'text-slate-700 hover:bg-white'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Student Inquiries ({inquiriesList.length})</span>
+            {inquiriesList.filter(i => i.status === 'Pending').length > 0 && (
+              <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse">
+                {inquiriesList.filter(i => i.status === 'Pending').length}
+              </span>
+            )}
           </button>
 
           <button
@@ -1156,6 +1285,86 @@ export const AdminDashboard = ({
             </p>
           </div>
 
+          {/* Action / Sync Feedback Message */}
+          {confActionMsg && (
+            <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{confActionMsg}</span>
+            </div>
+          )}
+
+          {/* Google Meet & Google Calendar Integration Hub */}
+          <div className="bg-gradient-to-r from-blue-900 via-[#0A192F] to-slate-900 text-white p-5 rounded-2xl shadow-md border border-blue-800/40 space-y-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-300">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <span>Google Meet & Calendar Integration</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full font-mono">
+                      ACTIVE
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Auto-schedules Google Calendar events, generates Google Meet room links, and sends reminders on conference day.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSyncCalendar}
+                  disabled={syncingCalendar}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingCalendar ? 'animate-spin' : ''}`} />
+                  <span>{syncingCalendar ? 'Syncing...' : 'Sync Meet & Calendar'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestReminder}
+                  disabled={testingReminder}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                >
+                  <Bell className="w-3.5 h-3.5 text-slate-950" />
+                  <span>{testingReminder ? 'Sending...' : 'Test Day Reminder'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Meet Link Display & Actions */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-700/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 truncate max-w-full">
+                <span className="text-slate-400 font-semibold shrink-0">🎥 Google Meet:</span>
+                <span className="font-mono text-amber-300 truncate">{confData.stream_link || 'https://meet.google.com'}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={confData.stream_link || 'https://meet.google.com'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] border border-blue-400/30 flex items-center gap-1 transition"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Join Room</span>
+                </a>
+                <a
+                  href={confData.calendar_html_link || `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(confData.title)}&dates=20261015T050000Z/20261015T110000Z&details=${encodeURIComponent('Lahore Leads University Conference\nMeet: ' + confData.stream_link)}&location=${encodeURIComponent(confData.venue)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[11px] border border-emerald-400/30 flex items-center gap-1 transition"
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>Calendar View</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
           {/* Quick Attach Article Presenter */}
           <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-200 space-y-2">
             <label className="text-xs font-black text-[#0A192F] flex items-center gap-1.5">
@@ -1246,7 +1455,48 @@ export const AdminDashboard = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-3 bg-blue-50/50 p-3.5 rounded-2xl border border-blue-200/80 space-y-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <label className="text-slate-900 block font-black text-xs">Official Google Meet Room (Virtual Stream & Passes) *</label>
+                    <p className="text-[11px] text-slate-500 font-medium">All students & delegates booking passes for this conference will automatically receive this exact Google Meet link!</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    <a
+                      href="https://meet.google.com/new"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-bold rounded-xl text-xs transition flex items-center gap-1 shadow-sm"
+                      title="Create an instant room in your logged-in Google/Gmail account"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>+ Create in Google Meet</span>
+                    </a>
+                    {confData.stream_link && (
+                      <a
+                        href={confData.stream_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1 shadow-sm"
+                        title="Test Conference Google Meet Room"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        <span>Test Room</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={confData.stream_link}
+                  onChange={(e) => setConfData({ ...confData, stream_link: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-mono font-bold text-blue-700 focus:ring-2 focus:ring-amber-400 outline-none"
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                />
+              </div>
+
               <div>
                 <label className="text-slate-700 block mb-1 font-bold">Onsite Physical Ticket Price (PKR) *</label>
                 <input
@@ -1532,13 +1782,51 @@ export const AdminDashboard = ({
                               </div>
                             </div>
                           ) : (
-                            <input
-                              type="text"
-                              value={allocatingLink[ticket.id] !== undefined ? allocatingLink[ticket.id] : (ticket.stream_link || 'https://meet.google.com/leads-summit-2026')}
-                              onChange={(e) => setAllocatingLink({ ...allocatingLink, [ticket.id]: e.target.value })}
-                              placeholder="https://meet.google.com/xyz-stream"
-                              className="w-full sm:w-96 bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold"
-                            />
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto flex-1 flex-wrap">
+                              <input
+                                type="text"
+                                value={allocatingLink[ticket.id] !== undefined ? allocatingLink[ticket.id] : (ticket.stream_link || (conferences.find(c => c.id == ticket.conference_id) || activeConf)?.stream_link || 'https://meet.google.com/nrc-inno-sum')}
+                                onChange={(e) => setAllocatingLink({ ...allocatingLink, [ticket.id]: e.target.value })}
+                                placeholder="https://meet.google.com/abc-defg-hij"
+                                className="w-full sm:w-72 bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const letters = 'abcdefghijklmnopqrstuvwxyz';
+                                  const pick = (len) => Array.from({ length: len }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+                                  const validCode = `https://meet.google.com/${pick(3)}-${pick(4)}-${pick(3)}`;
+                                  setAllocatingLink({ ...allocatingLink, [ticket.id]: validCode });
+                                }}
+                                className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-xl text-[11px] font-bold border border-amber-300 flex items-center gap-1 shrink-0"
+                                title="Generate valid Google Meet code (3-4-3 format)"
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-600" />
+                                <span>Auto-Gen Code</span>
+                              </button>
+                              <a
+                                href="https://meet.google.com/new"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 rounded-xl text-[11px] font-bold border border-purple-200 flex items-center gap-1 shrink-0"
+                                title="Open Google Meet in your account to create a live room"
+                              >
+                                <ExternalLink className="w-3 h-3 text-purple-600" />
+                                <span>+ New from Google</span>
+                              </a>
+                              {(allocatingLink[ticket.id] || ticket.stream_link || activeConf?.stream_link) && (
+                                <a
+                                  href={allocatingLink[ticket.id] || ticket.stream_link || activeConf?.stream_link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-[11px] font-bold border border-blue-200 flex items-center gap-1 shrink-0"
+                                  title="Test Google Meet Room in new tab"
+                                >
+                                  <Video className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Test Room</span>
+                                </a>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -1849,6 +2137,253 @@ export const AdminDashboard = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: STUDENT INQUIRIES & DIRECT SUPPORT DESK                              */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'inquiries' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm">
+            <div>
+              <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Student-Admin Communication Pipeline</span>
+              <h2 className="text-2xl font-black text-[#0A192F]">Student Inquiries & Helpdesk Desk</h2>
+              <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                Real-time inquiry desk connected to WhatsApp (+92 348 2727605), Gmail, and Google Drive archival. Replying sends an official email directly to the student's inbox and updates their portal in real time.
+              </p>
+            </div>
+
+            <button
+              onClick={fetchAdminInquiries}
+              disabled={loadingInquiries}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingInquiries ? 'animate-spin' : ''}`} />
+              <span>Refresh Messages</span>
+            </button>
+          </div>
+
+          {inquiryActionMsg && (
+            <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 p-4 rounded-2xl text-xs font-bold animate-fade-in flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{inquiryActionMsg}</span>
+            </div>
+          )}
+
+          {/* Search & Filters */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={inquirySearch}
+                onChange={(e) => setInquirySearch(e.target.value)}
+                placeholder="Search by student, email, subject, or message..."
+                className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none transition"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-bold self-end sm:self-auto">
+              <button
+                onClick={() => setInquiryFilter('all')}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  inquiryFilter === 'all' ? 'bg-[#0A192F] text-amber-400 font-black' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                All Messages ({inquiriesList.length})
+              </button>
+              <button
+                onClick={() => setInquiryFilter('pending')}
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1 ${
+                  inquiryFilter === 'pending' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+                }`}
+              >
+                <span>⏳ Pending Reply</span>
+                <span className="bg-white text-amber-950 text-[10px] px-1.5 rounded-full font-black">
+                  {inquiriesList.filter(i => i.status === 'Pending').length}
+                </span>
+              </button>
+              <button
+                onClick={() => setInquiryFilter('replied')}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  inquiryFilter === 'replied' ? 'bg-emerald-700 text-white font-black' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                ✓ Replied ({inquiriesList.filter(i => i.status === 'Replied').length})
+              </button>
+            </div>
+          </div>
+
+          {/* Inquiries Cards */}
+          {inquiriesList.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 text-slate-500 space-y-2">
+              <MessageSquare className="w-12 h-12 text-slate-300 mx-auto" />
+              <h3 className="font-bold text-slate-700">No Student Inquiries Recorded</h3>
+              <p className="text-xs">When students submit questions from their dashboard, they will appear here in real time with instant reply capabilities.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {inquiriesList
+                .filter(inq => {
+                  if (inquiryFilter === 'pending') return inq.status === 'Pending';
+                  if (inquiryFilter === 'replied') return inq.status === 'Replied';
+                  return true;
+                })
+                .filter(inq => {
+                  if (!inquirySearch) return true;
+                  const q = inquirySearch.toLowerCase();
+                  return (
+                    (inq.student_name && inq.student_name.toLowerCase().includes(q)) ||
+                    (inq.student_email && inq.student_email.toLowerCase().includes(q)) ||
+                    (inq.subject && inq.subject.toLowerCase().includes(q)) ||
+                    (inq.message && inq.message.toLowerCase().includes(q)) ||
+                    (inq.category && inq.category.toLowerCase().includes(q))
+                  );
+                })
+                .map((inquiry) => {
+                  const isPending = inquiry.status === 'Pending';
+                  const currentReply = replyTextMap[inquiry.id] || '';
+
+                  return (
+                    <div
+                      key={inquiry.id}
+                      className={`bg-white rounded-3xl p-6 border-2 transition-all space-y-4 shadow-sm ${
+                        isPending ? 'border-amber-300 bg-amber-50/15' : 'border-slate-200'
+                      }`}
+                    >
+                      {/* Top Header */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl bg-[#0A192F] text-amber-400 flex items-center justify-center font-black text-sm shrink-0 border border-amber-400/30">
+                            🎓
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-base font-black text-[#0A192F]">{inquiry.student_name}</h3>
+                              <span className="text-xs font-mono text-slate-500 font-semibold">({inquiry.student_email || 'student@leads.edu.pk'})</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 border border-blue-200">
+                                {inquiry.category}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 font-mono mt-0.5">
+                              Inquiry ID: #{inquiry.id} • Submitted: {inquiry.created_at ? new Date(inquiry.created_at).toLocaleString() : 'Recently'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className={`text-xs font-black px-3 py-1 rounded-full border flex items-center gap-1.5 ${
+                            isPending
+                              ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                              : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                          }`}>
+                            {isPending ? '⏳ Awaiting Admin Reply' : '✅ Replied & Sent to Gmail'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Inquiry Content */}
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                        <div className="text-xs font-black text-[#0A192F] flex items-center gap-1.5">
+                          <span>Subject:</span>
+                          <span className="font-bold text-blue-900">{inquiry.subject}</span>
+                        </div>
+                        <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-white p-3.5 rounded-xl border border-slate-200">
+                          {inquiry.message}
+                        </div>
+                      </div>
+
+                      {/* Existing Response Display */}
+                      {inquiry.reply_text && (
+                        <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-amber-400/30 space-y-2 shadow-inner">
+                          <div className="flex justify-between items-center border-b border-white/10 pb-1.5">
+                            <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4" /> Previous Response from {inquiry.admin_name || 'Admin Desk'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {inquiry.replied_at ? new Date(inquiry.replied_at).toLocaleString() : ''}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">{inquiry.reply_text}</p>
+                        </div>
+                      )}
+
+                      {/* Inline Reply Box */}
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="text-xs font-black text-[#0A192F] flex items-center gap-1.5">
+                            <Send className="w-3.5 h-3.5 text-blue-600" />
+                            <span>{inquiry.reply_text ? 'Send Additional Response / Follow-up' : 'Compose Official Response to Student'}</span>
+                          </label>
+
+                          {/* Quick Canned Responses */}
+                          <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                            <span className="text-slate-400 text-[10px] font-bold mr-1">Quick Templates:</span>
+                            <button
+                              type="button"
+                              onClick={() => setReplyTextMap(prev => ({
+                                ...prev,
+                                [inquiry.id]: `Dear ${inquiry.student_name},\n\nYour manuscript has been evaluated by the ORIC Editorial Board. Please review the revision notes attached to your submission and submit the corrected draft.\n\nBest regards,\nORIC Research Cell\nLahore Leads University`
+                              }))}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition font-medium"
+                            >
+                              Revision Notes Sent
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReplyTextMap(prev => ({
+                                ...prev,
+                                [inquiry.id]: `Dear ${inquiry.student_name},\n\nYour fee challan deposit proof has been verified by the university accounts desk. Your paper has been moved to the live publishing schedule.\n\nBest regards,\nORIC Research Cell\nLahore Leads University`
+                              }))}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition font-medium"
+                            >
+                              Challan Verified
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReplyTextMap(prev => ({
+                                ...prev,
+                                [inquiry.id]: `Dear ${inquiry.student_name},\n\nYour conference pass and delegate seating have been allocated. You can view your official E-Pass and Google Meet link in your student portal.\n\nBest regards,\nConference Secretariat\nLahore Leads University`
+                              }))}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition font-medium"
+                            >
+                              Pass Allocated
+                            </button>
+                          </div>
+                        </div>
+
+                        <textarea
+                          rows={3}
+                          value={currentReply}
+                          onChange={(e) => setReplyTextMap(prev => ({ ...prev, [inquiry.id]: e.target.value }))}
+                          placeholder="Type your official response here. This will be emailed directly to the student's Gmail and synced in their student portal..."
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 leading-relaxed focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"
+                        />
+
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1">
+                          <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                            <span>📧 Student Gmail: <strong className="text-slate-800">{inquiry.student_email || 'bazighminhas1@gmail.com'}</strong></span>
+                            <span>•</span>
+                            <span>📁 Google Drive: <strong className="text-slate-800">Student_Inquiries/</strong></span>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={replyingInquiryId === inquiry.id || !currentReply.trim()}
+                            onClick={() => handleSendAdminReply(inquiry)}
+                            className="px-5 py-2 bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-black text-xs rounded-xl transition shadow-md flex items-center gap-1.5 border border-amber-400/40 disabled:opacity-50"
+                          >
+                            <Send className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{replyingInquiryId === inquiry.id ? 'Dispatching Email & Syncing Drive...' : 'Send Official Response to Student'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 

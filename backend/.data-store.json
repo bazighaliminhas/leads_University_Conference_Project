@@ -1,5 +1,5 @@
 {
-  "saved_at": "2026-09-17T10:15:27.038Z",
+  "saved_at": "2026-09-23T08:25:19.783Z",
   "mockArticles": [
     {
       "id": 1789632013746,
@@ -75,7 +75,7 @@
       "event_date": "2026-09-15",
       "event_time": "10:00 AM - 04:00 PM",
       "venue": "University Main Auditorium & Global HD Live Stream",
-      "stream_link": "https://meet.google.com/xyz-demo-stream",
+      "stream_link": "https://meet.google.com/asf-iehc-iif",
       "onsite_ticket_price": 500,
       "online_ticket_price": 200,
       "presenting_students": "Ali Ahmed (Solar Grid AI), Bazigh Minhas (Quantum Cryptography), Ali Ahmed (Biocompatible Nanoparticles), Ali Ahmed (Agri Drones)",
@@ -147,6 +147,14 @@
       "password": "password123",
       "role": "investor",
       "organization": "FinTech Angels"
+    },
+    {
+      "id": 9,
+      "full_name": "Bazigh Ali Minhas4",
+      "email": "bazighaliminhas1@gmail.com",
+      "password": "scrypt$ba761d112805a0ae4a47fc82231e9f70$3a79447eeded1e541408eea9655125a45ace4bbf52ec79df7a1cefad846f6f0d8976f37042259186525b4781b4cfe2cb2e84127ca9c3ad250d58c876d6ee7b22",
+      "role": "student",
+      "organization": "Computer Science"
     }
   ],
   "mockJournals": [
@@ -417,7 +425,8 @@
       "event_time": "10:00 AM - 04:00 PM",
       "venue": "University Main Auditorium",
       "payment_status": "Paid",
-      "booked_at": "2026-08-30"
+      "booked_at": "2026-08-30",
+      "stream_link": "https://meet.google.com/asf-iehc-iif"
     }
   ],
   "mockInvestorReviews": [
@@ -456,6 +465,116 @@
   ],
   "mockPortalNotifications": [
     {
+      "id": 1790151853850,
+      "user_id": 9,
+      "role_target": null,
+      "type": "article_review",
+      "title": "Article review updated",
+      "message": "Your article “nothing=” status is now: Approved - Awaiting Publication Fee.",
+      "link": "/student/paper/1790151324012",
+      "is_read": false,
+      "created_at": "2026-09-23T08:24:13.529Z"
+    },
+    {
+      "id": 1790151688101,
+      "user_id": 9,
+      "role_target": null,
+      "type": "system",
+      "title": "🔔 Gmail Sync Activated",
+      "message": "Your Gmail (bazighaliminhas1@gmail.com) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.",
+      "link": "/student",
+      "is_read": false,
+      "created_at": "2026-09-23T08:21:27.354Z"
+    },
+    {
+      "id": 1790151686463,
+      "user_id": 9,
+      "role_target": null,
+      "type": "system",
+      "title": "🔔 Gmail Sync Activated",
+      "message": "Your Gmail (bazighaliminhas1@gmail.com) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.",
+      "link": "/student",
+      "is_read": false,
+      "created_at": "2026-09-23T08:21:25.639Z"
+    },
+    {
+      "id": 1790151684820,
+      "user_id": 9,
+      "role_target": null,
+      "type": "system",
+      "title": "🔔 Gmail Sync Activated",
+      "message": "Your Gmail (bazighaliminhas1@gmail.com) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.",
+      "link": "/student",
+      "is_read": false,
+      "created_at": "2026-09-23T08:21:23.861Z"
+    },
+    {
+      "id": 1790151683616,
+      "user_id": 9,
+      "role_target": null,
+      "type": "system",
+      "title": "🔔 Gmail Sync Activated",
+      "message": "Your Gmail (bazighaliminhas1@gmail.com) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.",
+      "link": "/student",
+      "is_read": false,
+      "created_at": "2026-09-23T08:21:23.555Z"
+    },
+    {
+      "id": 1790151681212,
+      "user_id": 9,
+      "role_target": null,
+      "type": "system",
+      "title": "🔔 Gmail Sync Activated",
+      "message": "Your Gmail (bazighaliminhas1@gmail.com) is successfully connected to the Admin ORIC dispatch system. You will receive direct emails on all reviewer feedback and message responses.",
+      "link": "/student",
+      "is_read": false,
+      "created_at": "2026-09-23T08:21:20.609Z"
+    },
+    {
+      "id": 1790151613570,
+      "user_id": 9,
+      "role_target": null,
+      "type": "article_review",
+      "title": "Article review updated",
+      "message": "Your article “nothing=” status is now: Needs Revision.",
+      "link": "/student/paper/1790151324012",
+      "is_read": false,
+      "created_at": "2026-09-23T08:20:12.639Z"
+    },
+    {
+      "id": 1790151567792,
+      "user_id": 9,
+      "role_target": null,
+      "type": "article_review",
+      "title": "Article review updated",
+      "message": "Your article “nothing=” status is now: Needs Revision.",
+      "link": "/student/paper/1790151324012",
+      "is_read": false,
+      "created_at": "2026-09-23T08:19:27.193Z"
+    },
+    {
+      "id": 1790151324386,
+      "user_id": 9,
+      "role_target": null,
+      "type": "article_submitted",
+      "title": "Submission received",
+      "message": "Your article “nothing=” was submitted successfully and is awaiting admin review.",
+      "link": "/student/paper/1790151324012",
+      "is_read": false,
+      "created_at": "2026-09-23T08:15:24.030Z"
+    },
+    {
+      "id": 1790151324312,
+      "user_id": null,
+      "role_target": "admin",
+      "type": "article_submitted",
+      "title": "New article submitted",
+      "message": "Bazigh Ali Minhas4 submitted “nothing=” with payment proof.",
+      "link": "/admin/review/1790151324012",
+      "is_read": false,
+      "created_at": "2026-09-23T08:15:24.026Z"
+    },
+    {
       "id": 1789632014682,
       "user_id": 5,
       "role_target": null,
@@ -476,6 +595,23 @@
       "link": "/student/paper/1789630582546",
       "is_read": false,
       "created_at": "2026-09-17T07:36:22.550Z"
+    }
+  ],
+  "mockInquiries": [
+    {
+      "id": 1,
+      "user_id": 5,
+      "user_name": "Bazigh Minhas",
+      "user_email": "bazighminhas1@gmail.com",
+      "sender_mobile": "0348-2727605",
+      "subject": "Inquiry regarding Journal Volume 1 Issue 2 Publication",
+      "category": "Publication Guidance",
+      "message": "Dear ORIC Editorial Board, I would like to inquire regarding the exact release date of RAIR Volume 1 Issue 2.",
+      "admin_reply": "Dear Bazigh, Volume 1 Issue 2 is scheduled for official indexation on October 30, 2026.",
+      "replied_by": "System Admin (ORIC)",
+      "replied_at": "2026-09-01 14:30:00",
+      "status": "Replied",
+      "created_at": "2026-09-01"
     }
   ]
 }

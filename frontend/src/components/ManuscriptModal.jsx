@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { TierBadge } from './TierBadge';
 import { ProofViewerModal } from './ProofViewerModal';
+import { OfficialChallanModal } from './OfficialChallanModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -30,6 +31,7 @@ export const ManuscriptModal = ({ isOpen, onClose, article, user, onOpenAuth }) 
 
   // Reader Access Form State
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showChallanModal, setShowChallanModal] = useState(false);
   const [senderBank, setSenderBank] = useState('HBL Mobile App');
   const [transactionId, setTransactionId] = useState(() => `TRX-READ-${Math.floor(100000 + Math.random() * 900000)}`);
   const [senderMobile, setSenderMobile] = useState('0300-1234567');
@@ -453,9 +455,19 @@ export const ManuscriptModal = ({ isOpen, onClose, article, user, onOpenAuth }) 
                   <span className="font-bold text-[#0A192F] flex items-center gap-1.5">
                     <Building2 className="w-4 h-4 text-blue-700" /> Official Fee Voucher (Payable: PKR 500)
                   </span>
-                  <span className="font-mono text-[10px] bg-white text-slate-700 font-bold px-2 py-0.5 rounded border">
-                    CHAL-READ-500
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowChallanModal(true)}
+                      className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-[#0A192F] font-bold text-[10px] border border-amber-300 flex items-center gap-1 transition"
+                    >
+                      <Printer className="w-3 h-3 text-amber-700" />
+                      <span>Print A4 Challan</span>
+                    </button>
+                    <span className="font-mono text-[10px] bg-white text-slate-700 font-bold px-2 py-0.5 rounded border">
+                      CHAL-READ-500
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-700">
                   <div>🏦 <strong>Bank:</strong> Habib Bank Limited (HBL)</div>
@@ -611,6 +623,20 @@ export const ManuscriptModal = ({ isOpen, onClose, article, user, onOpenAuth }) 
           </div>
         </div>
       </div>
+
+      {showChallanModal && (
+        <OfficialChallanModal
+          isOpen={showChallanModal}
+          onClose={() => setShowChallanModal(false)}
+          feeDetails={{
+            feeType: 'Reader Full Manuscript Access',
+            amount: 500,
+            title: `Reader Access: ${article.title}`,
+            studentName: user?.full_name || 'Scholar Reader',
+            contactNo: senderMobile
+          }}
+        />
+      )}
     </div>
   );
 };

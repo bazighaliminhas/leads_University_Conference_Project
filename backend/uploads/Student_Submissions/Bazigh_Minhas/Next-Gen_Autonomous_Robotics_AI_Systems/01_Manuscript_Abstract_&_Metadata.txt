@@ -1,0 +1,36 @@
+===================================================================
+LAHORE LEADS UNIVERSITY - ORIC RESEARCH REPOSITORY
+OFFICIAL STUDENT MANUSCRIPT & SUBMISSION RECORD
+===================================================================
+Submission ID:     LLU-ART-1790230731537
+Student Name:      Bazigh Minhas
+Student Email:     bazighminhas1@gmail.com
+Contact Mobile:    +923482727605
+Paper Title:       Next-Gen Autonomous Robotics & AI Systems
+Discipline/Field:  Artificial Intelligence & Robotics
+Submission Date:   9/24/2026, 11:18:51 AM
+Plagiarism Status: Clean (0% Plagiarism Verified)
+Transaction ID:    TID-LLU-2026-9482
+Bank Channel:      HBL Mobile Banking
+Submission Fee:    PKR 1,500 (VERIFIED DEPOSITED)
+Current Status:    Submitted - Awaiting Editorial Review
+-------------------------------------------------------------------
+ABSTRACT SUMMARY:
+This research paper investigates real-time edge computing frameworks and neural motion planning for autonomous surgical and industrial robotics, validated under rigorous latency tests.
+-------------------------------------------------------------------
+FULL MANUSCRIPT TEXT:
+ABSTRACT:
+This research paper investigates real-time edge computing frameworks and neural motion planning for autonomous surgical and industrial robotics, validated under rigorous latency tests.
+
+1. INTRODUCTION:
+Autonomous robotic navigation requires deterministic compute models combined with ultra-low latency vision processing.
+
+2. SYSTEM METHODOLOGY & NEURAL NETWORK ARCHITECTURE:
+Our architecture leverages deep sensor fusion across LiDAR and stereo cameras with onboard neural acceleration.
+
+3. BENCHMARKS & EXPERIMENTAL VALIDATION:
+Experiments on real-world industrial environments demonstrated a 34% reduction in path-planning latency and zero collision failure modes.
+
+4. CONCLUSION:
+The proposed framework provides a robust foundation for next-generation university and commercial robotic deployments.
+===================================================================

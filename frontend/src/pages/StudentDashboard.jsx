@@ -41,6 +41,8 @@ import { TierBadge } from '../components/TierBadge';
 import { ProofViewerModal } from '../components/ProofViewerModal';
 import { ManuscriptModal } from '../components/ManuscriptModal';
 import { LeadsLogo } from '../components/LeadsLogo';
+import { OfficialChallanModal } from '../components/OfficialChallanModal';
+import { GeminiNotebookModal } from '../components/GeminiNotebookModal';
 
 const FALLBACK_JOURNALS = [
   { id: 1, title: 'Robotics and Artificial Intelligence Review', short_code: 'RAIR', category: 'Artificial Intelligence & Robotics' },
@@ -111,6 +113,8 @@ export const StudentDashboard = ({
   const [activeConfFeeArticle, setActiveConfFeeArticle] = useState(null);
   const [viewPaperArticle, setViewPaperArticle] = useState(null);
   const [viewProofModal, setViewProofModal] = useState(null); // { title, url, type, senderBank, transactionId, senderMobile, studentName, amount }
+  const [challanModalData, setChallanModalData] = useState(null); // { feeType, amount, title, studentName, rollNo }
+  const [activeAiArticle, setActiveAiArticle] = useState(null); // article object or boolean to open Gemini Notebook Modal
 
   // New Article Form State
   const [title, setTitle] = useState('');
@@ -120,6 +124,8 @@ export const StudentDashboard = ({
   const [pdfFileName, setPdfFileName] = useState('');
   const [subReceiptPreview, setSubReceiptPreview] = useState('');
   const [subReceiptName, setSubReceiptName] = useState('');
+  const [payReceiptPreview, setPayReceiptPreview] = useState('');
+  const [payReceiptName, setPayReceiptName] = useState('');
   const [senderBank, setSenderBank] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [senderMobile, setSenderMobile] = useState('');
@@ -446,50 +452,20 @@ export const StudentDashboard = ({
     }
   };
 
-  // Generate Official Bank Challan PDF for Student to Print & Pay
-  const handleDownloadChallanPdf = (typeTitle, feeAmount, voucherNo) => {
-    const studentName = (user.full_name || 'Student Researcher').replace(/[\(\)\\]/g, ' ');
-    const printWin = window.open('', '_blank');
-    if (!printWin) return;
-
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>LLU Fee Challan - ${voucherNo}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 25px; color: #0A192F; }
-          .box { border: 2px solid #0A192F; padding: 20px; border-radius: 12px; max-width: 600px; margin: 0 auto; }
-          .header { text-align: center; border-bottom: 2px solid #0A192F; padding-bottom: 12px; margin-bottom: 15px; }
-          .title { font-size: 16pt; font-weight: bold; }
-          .sub { font-size: 10pt; color: #555; }
-          .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #ccc; font-size: 11pt; }
-          .total { font-size: 14pt; font-weight: bold; color: #15803d; border-top: 2px solid #0A192F; margin-top: 15px; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <div class="header">
-            <div class="title">LAHORE LEADS UNIVERSITY</div>
-            <div class="sub">Office of Research, Innovation & Commercialization (ORIC)</div>
-            <div style="font-weight:bold; margin-top:5px;">OFFICIAL BANK CHALLAN VOUCHER</div>
-          </div>
-          <div class="row"><span>Voucher No:</span><strong>${voucherNo}</strong></div>
-          <div class="row"><span>Student Name:</span><strong>${studentName}</strong></div>
-          <div class="row"><span>Fee Purpose:</span><strong>${typeTitle}</strong></div>
-          <div class="row"><span>Bank Name:</span><strong>Habib Bank Limited (HBL) / Easypaisa / JazzCash</strong></div>
-          <div class="row"><span>Account No:</span><strong>0042-79001928-03 (Title: Univ Research Fund)</strong></div>
-          <div class="row total"><span>TOTAL PAYABLE:</span><span>${feeAmount}</span></div>
-          <p style="font-size:9pt; color:#666; margin-top:15px; text-align:center;">
-            Deposit fee in bank or transfer online. Take a screenshot of the paid receipt and upload in your Student Portal.
-          </p>
-        </div>
-      </body>
-      </html>
-    `);
-    printWin.document.close();
-    printWin.focus();
-    setTimeout(() => printWin.print(), 300);
+  // Open Official Lahore Leads University Fee Challan Modal (4-Copy Layout)
+  const handleDownloadChallanPdf = (typeTitle = 'Manuscript Submission Fee', feeAmount = 1500, voucherNo = null) => {
+    const rawAmt = typeof feeAmount === 'string' ? parseInt(feeAmount.replace(/[^0-9]/g, ''), 10) || 1500 : feeAmount;
+    setChallanModalData({
+      feeType: typeTitle,
+      amount: rawAmt,
+      title: `${typeTitle} • Lahore Leads University ORIC`,
+      studentName: user?.full_name || 'Student Researcher',
+      rollNo: user?.roll_no || `LLU-CS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      department: 'Faculty of Computer Science & IT',
+      degreeProgram: 'BS / MS Research Thesis',
+      contactNo: user?.mobile || '0348-2727605',
+      challanNo: voucherNo || `LLU-ORIC-2026-${Math.floor(100000 + Math.random() * 900000)}`
+    });
   };
 
   return (
@@ -557,14 +533,40 @@ export const StudentDashboard = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenSubmitModal}
-          className="px-6 py-3.5 bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-black rounded-2xl text-xs transition shadow-md flex items-center gap-2 border border-amber-400/40 shrink-0 self-start md:self-auto cursor-pointer"
-        >
-          <PlusCircle className="w-4 h-4 text-amber-400" />
-          <span>Submit New Research Paper</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setActiveAiArticle({
+              title: 'Autonomous Systems & Edge AI Diagnostics',
+              category: 'Artificial Intelligence & Robotics',
+              abstract: 'A deep learning framework for real-time edge processing and autonomous robotics navigation.'
+            })}
+            className="px-4 py-3 bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 text-amber-300 font-black rounded-2xl text-xs transition shadow-md flex items-center gap-2 border border-purple-400/40 cursor-pointer"
+            title="Open Gemini NotebookLM Research Co-Pilot"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400 animate-spin-slow" />
+            <span>ORIC AI Research Co-Pilot</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleDownloadChallanPdf('General Research / Submission Fee', 1500)}
+            className="px-4 py-3 bg-amber-50 hover:bg-amber-100 text-[#0A192F] border border-amber-300 font-bold rounded-2xl text-xs transition shadow-xs flex items-center gap-1.5"
+            title="Generate & print 4-copy official bank challan"
+          >
+            <Printer className="w-4 h-4 text-amber-600" />
+            <span>Official Fee Challan</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenSubmitModal}
+            className="px-6 py-3.5 bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-black rounded-2xl text-xs transition shadow-md flex items-center gap-2 border border-amber-400/40 cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4 text-amber-400" />
+            <span>Submit New Research Paper</span>
+          </button>
+        </div>
       </div>
 
       {/* Sub-Tabs Navigation: Manuscripts vs Conference Passes */}
@@ -878,6 +880,17 @@ export const StudentDashboard = ({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* Gemini AI Research Assistant Button */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveAiArticle(article)}
+                          className="px-3 py-2 bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 text-amber-300 text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-xs border border-purple-400/40"
+                          title="Open Gemini NotebookLM Literature & Citations"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                          <span>AI Citations & Mistakes</span>
+                        </button>
+
                         {/* Action 1: Resubmit Corrected Manuscript */}
                         {isNeedsRevision && (
                           <button
@@ -1597,9 +1610,19 @@ export const StudentDashboard = ({
 
               {/* Payment Receipt Upload */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <label className="text-slate-800 block font-bold">
-                  Upload Paid Submission Fee Screenshot (PKR 1,500) *
-                </label>
+                <div className="flex flex-wrap justify-between items-center gap-2 border-b border-slate-200 pb-2">
+                  <label className="text-slate-800 block font-bold text-xs uppercase tracking-wider">
+                    💳 Submission Fee Deposit (PKR 1,500) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadChallanPdf('Manuscript Submission & Review Fee', 1500)}
+                    className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-[#0A192F] font-bold text-[11px] border border-amber-300 flex items-center gap-1 transition"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Print A4 Challan (4 Copies)</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <span className="text-[11px] text-slate-500 block mb-0.5">Paid Via Bank / App</span>
@@ -2172,6 +2195,30 @@ export const StudentDashboard = ({
         article={viewPaperArticle}
         user={user}
       />
+
+      {/* OFFICIAL LAHORE LEADS UNIVERSITY CHALLAN MODAL */}
+      {challanModalData && (
+        <OfficialChallanModal
+          isOpen={Boolean(challanModalData)}
+          onClose={() => setChallanModalData(null)}
+          feeDetails={challanModalData}
+          user={user}
+          onProceedToUpload={() => {
+            setChallanModalData(null);
+            setShowSubmitModal(true);
+          }}
+        />
+      )}
+
+      {/* GEMINI NOTEBOOKLM RESEARCH CO-PILOT MODAL */}
+      {activeAiArticle && (
+        <GeminiNotebookModal
+          isOpen={Boolean(activeAiArticle)}
+          onClose={() => setActiveAiArticle(null)}
+          initialArticle={typeof activeAiArticle === 'object' ? activeAiArticle : null}
+          user={user}
+        />
+      )}
     </div>
   );
 };

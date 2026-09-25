@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { CreditCard, CheckCircle2, Lock, Smartphone, Upload, FileText, X, Printer, Building2 } from 'lucide-react';
+import { CreditCard, CheckCircle2, Lock, Smartphone, Upload, FileText, X, Printer, Building2, Download } from 'lucide-react';
+import { OfficialChallanModal } from './OfficialChallanModal';
 
-export const PaymentModal = ({ isOpen, onClose, title, amount, feeType = 'Publication', onSuccess }) => {
+export const PaymentModal = ({ isOpen, onClose, title, amount, feeType = 'Publication', studentName = '', onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [receiptPreview, setReceiptPreview] = useState('');
   const [receiptName, setReceiptName] = useState('');
   const [senderBank, setSenderBank] = useState('HBL Mobile App');
   const [transactionId, setTransactionId] = useState(() => `TRX-${Math.floor(100000 + Math.random() * 900000)}`);
   const [senderMobile, setSenderMobile] = useState('0300-1234567');
+  const [showOfficialChallan, setShowOfficialChallan] = useState(false);
 
   if (!isOpen) return null;
 
@@ -44,24 +46,37 @@ export const PaymentModal = ({ isOpen, onClose, title, amount, feeType = 'Public
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xl relative text-slate-900 my-8">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-full bg-slate-100 transition"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+        <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xl relative text-slate-900 my-8">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-full bg-slate-100 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
 
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="w-9 h-9 rounded-xl bg-[#0A192F] text-amber-400 flex items-center justify-center font-black text-xs border border-amber-400">
-            ORIC
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#0A192F] text-amber-400 flex items-center justify-center font-black text-xs border border-amber-400">
+                ORIC
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-[#0A192F]">{title || 'University Fee Challan'}</h3>
+                <p className="text-[11px] text-slate-500 font-semibold">Lahore Leads University • ORIC Accounts & Verification</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowOfficialChallan(true)}
+              className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#0A192F] border border-amber-300 font-bold text-[11px] flex items-center gap-1 transition shrink-0"
+              title="Print standard 4-copy university challan voucher"
+            >
+              <Printer className="w-3.5 h-3.5 text-amber-600" />
+              <span>Print A4 Challan</span>
+            </button>
           </div>
-          <div>
-            <h3 className="text-xl font-black text-[#0A192F]">{title || 'University Fee Challan'}</h3>
-            <p className="text-[11px] text-slate-500 font-semibold">Lahore Leads University • ORIC Accounts & Verification</p>
-          </div>
-        </div>
 
         {/* Formal University Challan Voucher */}
         <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl my-4 border border-slate-200 space-y-3">
@@ -196,5 +211,19 @@ export const PaymentModal = ({ isOpen, onClose, title, amount, feeType = 'Public
         </form>
       </div>
     </div>
+
+    {showOfficialChallan && (
+      <OfficialChallanModal
+        isOpen={showOfficialChallan}
+        onClose={() => setShowOfficialChallan(false)}
+        feeDetails={{
+          feeType,
+          amount,
+          title: title || 'Official University Fee Deposit',
+          studentName: studentName || 'Applicant Scholar'
+        }}
+      />
+    )}
+  </>
   );
 };

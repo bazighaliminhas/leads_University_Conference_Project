@@ -24,6 +24,7 @@ import {
   Check
 } from 'lucide-react';
 import { LeadsLogo } from './LeadsLogo';
+import { OfficialChallanModal } from './OfficialChallanModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -39,6 +40,7 @@ export const TicketBookingModal = ({ isOpen, onClose, conference, user, onSucces
   const [receiptName, setReceiptName] = useState('');
   const [loading, setLoading] = useState(false);
   const [issuedTicket, setIssuedTicket] = useState(null);
+  const [showChallanModal, setShowChallanModal] = useState(false);
 
   React.useEffect(() => {
     if (user?.full_name) setAttendeeName(user.full_name);
@@ -220,9 +222,19 @@ export const TicketBookingModal = ({ isOpen, onClose, conference, user, onSucces
                 <span className="font-bold text-[#0A192F] flex items-center gap-1.5 uppercase tracking-wide">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" /> Official Fee Voucher (Payable: PKR {payableAmount})
                 </span>
-                <span className="font-mono text-slate-600 font-bold bg-white px-2 py-0.5 rounded border">
-                  CHAL-CONF-{Math.floor(10000 + Math.random() * 90000)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChallanModal(true)}
+                    className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-[#0A192F] font-bold text-[10px] border border-amber-300 flex items-center gap-1 transition"
+                  >
+                    <Printer className="w-3 h-3 text-amber-700" />
+                    <span>Print A4 Challan</span>
+                  </button>
+                  <span className="font-mono text-slate-600 font-bold bg-white px-2 py-0.5 rounded border text-[10px]">
+                    CHAL-CONF-{Math.floor(10000 + Math.random() * 90000)}
+                  </span>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700 pt-1">
                 <div>🏦 <strong>Bank:</strong> Habib Bank Limited (HBL)</div>
@@ -490,6 +502,20 @@ export const TicketBookingModal = ({ isOpen, onClose, conference, user, onSucces
           </div>
         )}
       </div>
+
+      {showChallanModal && (
+        <OfficialChallanModal
+          isOpen={showChallanModal}
+          onClose={() => setShowChallanModal(false)}
+          feeDetails={{
+            feeType: `${ticketType === 'onsite' ? 'On-Site Auditorium' : 'Virtual HD Live Stream'} Pass`,
+            amount: payableAmount,
+            title: conference.title || 'Lahore Leads University Academic Conference',
+            studentName: attendeeName || user?.full_name || 'Conference Delegate',
+            contactNo: senderMobile
+          }}
+        />
+      )}
     </div>
   );
 };

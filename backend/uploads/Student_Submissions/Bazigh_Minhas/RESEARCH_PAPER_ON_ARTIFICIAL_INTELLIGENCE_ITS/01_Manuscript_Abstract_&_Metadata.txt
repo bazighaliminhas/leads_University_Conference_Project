@@ -1,0 +1,35 @@
+===================================================================
+LAHORE LEADS UNIVERSITY - ORIC RESEARCH REPOSITORY
+OFFICIAL STUDENT MANUSCRIPT & SUBMISSION RECORD
+===================================================================
+Submission ID:     LLU-ART-1790234115663
+Student Name:      Bazigh Minhas
+Student Email:     bazighminhas1@gmail.com
+Contact Mobile:    N/A
+Paper Title:       RESEARCH PAPER ON ARTIFICIAL INTELLIGENCE & ITS APPLICATIONS
+Discipline/Field:  Artificial Intelligence & Robotics
+Submission Date:   9/24/2026, 12:15:15 PM
+Plagiarism Status: Clean (0% Plagiarism Verified)
+Transaction ID:    54757000123003
+Bank Channel:      HBL Mobile App
+Submission Fee:    PKR 1,500 (VERIFIED DEPOSITED)
+Current Status:    Submitted - Awaiting Editorial Review
+-------------------------------------------------------------------
+ABSTRACT SUMMARY:
+It is the science and engineering of making intelligent machines, especially intelligent computer programs. It is related to
+the similar task of using computers to understand human intelligence, but AI does not have to confine itself to methods that
+are biologically observable. While no consensual definition of Artificial Intelligence (AI) exists, AI is broadly characterized
+as the study of computations that allow for perception, reason and action. Today, the amount of data that is generated, by
+both humans and machines, far outpaces humans’ ability to absorb, interpret, and make complex decisions based on that data.
+Artificial intelligence forms the basis for all computer learning and is the future of all complex decision making. This paper
+examines features of artificial Intelligence, introduction, definitions of AI, history, applications, growth and achievements.
+-------------------------------------------------------------------
+FULL MANUSCRIPT TEXT:
+It is the science and engineering of making intelligent machines, especially intelligent computer programs. It is related to
+the similar task of using computers to understand human intelligence, but AI does not have to confine itself to methods that
+are biologically observable. While no consensual definition of Artificial Intelligence (AI) exists, AI is broadly characterized
+as the study of computations that allow for perception, reason and action. Today, the amount of data that is generated, by
+both humans and machines, far outpaces humans’ ability to absorb, interpret, and make complex decisions based on that data.
+Artificial intelligence forms the basis for all computer learning and is the future of all complex decision making. This paper
+examines features of artificial Intelligence, introduction, definitions of AI, history, applications, growth and achievements.
+===================================================================

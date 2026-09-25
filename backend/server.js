@@ -58,6 +58,11 @@ const {
   getFileStreamFromDrive
 } = require('./googleDriveService');
 
+const {
+  analyzeManuscript,
+  getGroundedRelatedPapers
+} = require('./geminiNotebookService');
+
 // Helper to auto-upload base64/receipts with zero-failure local disk + Google Drive dual storage
 async function resolveDriveUrl(urlOrBase64, subfolderName = 'General_Uploads', defaultFileName = 'file') {
   if (!urlOrBase64) return urlOrBase64;
@@ -1476,6 +1481,77 @@ app.get('/api/drive-proxy/:fileId', async (req, res) => {
         return res.status(404).send('Drive image not found or restricted');
       }
     }
+  }
+});
+
+// =========================================================================
+// 🧠 GEMINI NOTEBOOKLM RESEARCH & PLAGIARISM ENGINE
+// =========================================================================
+app.post('/api/ai/analyze-manuscript', async (req, res) => {
+  try {
+    const { title, abstract, full_text, category, article_id } = req.body;
+    if (!title && !abstract && !full_text) {
+      return res.status(400).json({ message: 'Title or abstract is required for AI analysis.' });
+    }
+
+    const existingArticles = (typeof mockArticles !== 'undefined' ? mockArticles : []);
+    const result = await analyzeManuscript({
+      title: title || 'Academic Manuscript',
+      abstract: abstract || '',
+      fullText: full_text || '',
+      category: category || 'Computer Science & AI',
+      existingArticles
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('❌ [GEMINI NOTEBOOK ERROR]:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'AI Analysis engine encountered an issue',
+      error: err.message
+    });
+  }
+});
+
+app.post('/api/ai/related-references', async (req, res) => {
+  try {
+    const { title, category } = req.body;
+    const existingArticles = (typeof mockArticles !== 'undefined' ? mockArticles : []);
+    const related = getGroundedRelatedPapers(title || '', category || '', existingArticles);
+    return res.json({ success: true, relatedPapers: related });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 🎙️ High-Quality Audio Podcast TTS Endpoint for NotebookLM Simulation
+app.get('/api/ai/tts', async (req, res) => {
+  try {
+    const text = req.query.text || 'Welcome to Lahore Leads University Research Deep Dive';
+    const speaker = (req.query.speaker || 'host1').toLowerCase();
+    const cleanText = encodeURIComponent(String(text).substring(0, 350));
+    // Host 1: en-US, Host 2: en-GB (distinct host voices)
+    const lang = (speaker.includes('2') || speaker.includes('female') || speaker.includes('reviewer')) ? 'en-gb' : 'en-us';
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${cleanText}`;
+
+    const response = await axios({
+      method: 'get',
+      url: ttsUrl,
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://translate.google.com/'
+      },
+      timeout: 8000
+    });
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    response.data.pipe(res);
+  } catch (err) {
+    console.warn('TTS streaming proxy notice:', err.message);
+    return res.status(502).json({ error: 'TTS stream unavailable', message: err.message });
   }
 });
 

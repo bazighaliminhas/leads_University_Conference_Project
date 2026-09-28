@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="380" viewBox="0 0 600 380">
+    <rect width="600" height="380" fill="#0b1329"/>
+    <rect x="15" y="15" width="570" height="350" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <text x="300" y="55" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">LAHORE LEADS UNIVERSITY</text>
+    <text x="300" y="80" font-family="Arial, sans-serif" font-size="12" fill="#38bdf8" text-anchor="middle">ORIC OFFICIAL SUBMISSION CHALLAN PROOF</text>
+    <line x1="35" y1="100" x2="565" y2="100" stroke="#334155" stroke-width="1.5"/>
+    <text x="50" y="140" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">Student Name:</text>
+    <text x="210" y="140" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff">Bazigh Minhas</text>
+    <text x="50" y="175" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">Paper Title:</text>
+    <text x="210" y="175" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#38bdf8">Next-Gen Autonomous Robotics & AI</text>
+    <text x="50" y="210" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">Transaction ID (TID):</text>
+    <text x="210" y="210" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#10b981">TID-LLU-2026-9482</text>
+    <text x="50" y="245" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">Payment Channel:</text>
+    <text x="210" y="245" font-family="Arial, sans-serif" font-size="13" fill="#ffffff">HBL Mobile App (Online)</text>
+    <text x="50" y="280" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">Submission Fee:</text>
+    <text x="210" y="280" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#10b981">PKR 1,500 (PAID & VERIFIED)</text>
+    <rect x="40" y="305" width="520" height="42" rx="8" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+    <text x="300" y="331" font-family="Arial, sans-serif" font-size="12" fill="#38bdf8" text-anchor="middle">✅ Digitally Recorded in Google Drive Student Folder</text>
+  </svg>

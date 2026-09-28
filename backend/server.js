@@ -63,6 +63,11 @@ const {
   getGroundedRelatedPapers
 } = require('./geminiNotebookService');
 
+const {
+  defaultResearchSupportResources,
+  defaultCategories
+} = require('./researchSupportData');
+
 // Helper to auto-upload base64/receipts with zero-failure local disk + Google Drive dual storage
 async function resolveDriveUrl(urlOrBase64, subfolderName = 'General_Uploads', defaultFileName = 'file') {
   if (!urlOrBase64) return urlOrBase64;
@@ -364,6 +369,23 @@ async function initDatabase() {
       );
     `);
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`research_support_resources\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`category\` VARCHAR(100) NOT NULL,
+        \`category_title\` VARCHAR(255) NOT NULL,
+        \`title\` VARCHAR(255) NOT NULL,
+        \`type\` VARCHAR(50) DEFAULT 'link',
+        \`source\` VARCHAR(255) DEFAULT '',
+        \`description\` TEXT,
+        \`url\` TEXT NOT NULL,
+        \`tags\` VARCHAR(255) DEFAULT '',
+        \`order_index\` INT DEFAULT 0,
+        \`is_active\` BOOLEAN DEFAULT TRUE,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Ensure missing columns
     await ensureColumn('articles', 'student_name', "VARCHAR(255) DEFAULT ''");
     await ensureColumn('articles', 'journal_id', "INT DEFAULT 1");
@@ -480,6 +502,20 @@ async function initDatabase() {
     } catch (galErr) {
       console.warn('⚠️ Gallery seed skipped:', galErr.message);
     }
+    try {
+      const [rsRows] = await db.query('SELECT COUNT(*) AS count FROM research_support_resources');
+      if (rsRows[0].count === 0) {
+        for (const item of defaultResearchSupportResources) {
+          await db.query(
+            `INSERT INTO research_support_resources (id, category, category_title, title, type, source, description, url, tags, order_index, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [item.id, item.category, item.category_title, item.title, item.type, item.source, item.description, item.url, item.tags, item.order_index, item.is_active ? 1 : 0]
+          );
+        }
+        console.log('✅ Seeded 31 Knowledge & Research Support Resources into MySQL!');
+      }
+    } catch (rsErr) {
+      console.warn('⚠️ Research support resources seed skipped:', rsErr.message);
+    }
 
     isDbConnected = true;
     console.log('✅ CONNECTED TO MYSQL DATABASE & ALL TABLES INITIALIZED SUCCESSFULLY! (univ_conference_db)');
@@ -493,6 +529,8 @@ async function initDatabase() {
 initDatabase();
 
 // In-Memory Storage Fallback (Always synchronized and 100% functional)
+let mockResearchSupport = JSON.parse(JSON.stringify(defaultResearchSupportResources));
+
 let mockJournals = [
   {
     id: 1,
@@ -1030,6 +1068,7 @@ function loadPersistentDataStore() {
       if (Array.isArray(parsed.mockInvestorReviews) && parsed.mockInvestorReviews.length > 0) mockInvestorReviews = parsed.mockInvestorReviews;
       if (Array.isArray(parsed.mockPortalNotifications)) mockPortalNotifications = parsed.mockPortalNotifications;
       if (Array.isArray(parsed.mockInquiries)) mockInquiries = parsed.mockInquiries;
+      if (Array.isArray(parsed.mockResearchSupport) && parsed.mockResearchSupport.length > 0) mockResearchSupport = parsed.mockResearchSupport;
 
       // Auto-sanitize all conference & pass meet codes to strictly valid Google Meet format ([a-z]{3}-[a-z]{4}-[a-z]{3})
       mockConferences.forEach(conf => {
@@ -1062,7 +1101,8 @@ function savePersistentDataStore() {
       mockTickets,
       mockInvestorReviews,
       mockPortalNotifications,
-      mockInquiries
+      mockInquiries,
+      mockResearchSupport
     };
     fs.writeFileSync(DATA_STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
   } catch (e) {
@@ -4071,6 +4111,368 @@ app.post('/api/student/notifications/connect-email', async (req, res) => {
       message: 'Could not connect email notification service',
       error: err.message
     });
+  }
+});
+
+// ================= KNOWLEDGE & RESEARCH SUPPORT SERVICES (KRSS) ENDPOINTS =================
+
+// Public: Get all active research support resources (with optional filters)
+app.get('/api/research-support', async (req, res) => {
+  const { category, type, search } = req.query;
+  
+  if (isDbConnected) {
+    try {
+      let sql = 'SELECT * FROM research_support_resources WHERE is_active = TRUE';
+      const params = [];
+
+      if (category && category !== 'all') {
+        sql += ' AND category = ?';
+        params.push(category);
+      }
+      if (type && type !== 'all') {
+        sql += ' AND type = ?';
+        params.push(type);
+      }
+      if (search) {
+        sql += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ? OR source LIKE ?)';
+        const term = `%${search.trim()}%`;
+        params.push(term, term, term, term);
+      }
+
+      sql += ' ORDER BY order_index ASC, id ASC';
+      const [rows] = await db.query(sql, params);
+      return res.json({
+        success: true,
+        categories: defaultCategories,
+        total: rows.length,
+        resources: rows
+      });
+    } catch (err) {
+      console.error('DB research support error:', err.message);
+    }
+  }
+
+  // Memory fallback
+  let filtered = mockResearchSupport.filter(r => r.is_active !== false);
+  if (category && category !== 'all') {
+    filtered = filtered.filter(r => r.category === category);
+  }
+  if (type && type !== 'all') {
+    filtered = filtered.filter(r => r.type === type);
+  }
+  if (search) {
+    const s = search.toLowerCase();
+    filtered = filtered.filter(r => 
+      (r.title && r.title.toLowerCase().includes(s)) ||
+      (r.description && r.description.toLowerCase().includes(s)) ||
+      (r.tags && r.tags.toLowerCase().includes(s)) ||
+      (r.source && r.source.toLowerCase().includes(s))
+    );
+  }
+
+  filtered.sort((a, b) => (a.order_index || 0) - (b.order_index || 0) || a.id - b.id);
+
+  res.json({
+    success: true,
+    categories: defaultCategories,
+    total: filtered.length,
+    resources: filtered
+  });
+});
+
+// Public: Get research support categories metadata
+app.get('/api/research-support/categories', (req, res) => {
+  res.json({
+    success: true,
+    categories: defaultCategories
+  });
+});
+
+// Admin: Get all research support resources (including inactive)
+app.get('/api/admin/research-support', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  if (isDbConnected) {
+    try {
+      const [rows] = await db.query('SELECT * FROM research_support_resources ORDER BY order_index ASC, id ASC');
+      return res.json({
+        success: true,
+        total: rows.length,
+        categories: defaultCategories,
+        resources: rows
+      });
+    } catch (err) {
+      console.error('DB admin research support error:', err.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    total: mockResearchSupport.length,
+    categories: defaultCategories,
+    resources: mockResearchSupport
+  });
+});
+
+// Admin: Create new Research Support Resource
+app.post('/api/admin/research-support', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  const {
+    category,
+    category_title,
+    title,
+    type = 'link',
+    source = '',
+    description = '',
+    url,
+    tags = '',
+    order_index = 0,
+    is_active = true
+  } = req.body;
+
+  if (!title || !category || !url) {
+    return res.status(400).json({ message: 'Title, category, and URL are required' });
+  }
+
+  const resolvedCatTitle = category_title || 
+    (defaultCategories.find(c => c.id === category)?.title) || 
+    category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  const newResource = {
+    id: Date.now(),
+    category,
+    category_title: resolvedCatTitle,
+    title: title.trim(),
+    type,
+    source: source.trim(),
+    description: description.trim(),
+    url: url.trim(),
+    tags: tags.trim(),
+    order_index: Number(order_index) || 0,
+    is_active: is_active === false ? false : true,
+    created_at: new Date().toISOString()
+  };
+
+  if (isDbConnected) {
+    try {
+      const [result] = await db.query(
+        `INSERT INTO research_support_resources 
+        (category, category_title, title, type, source, description, url, tags, order_index, is_active) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newResource.category,
+          newResource.category_title,
+          newResource.title,
+          newResource.type,
+          newResource.source,
+          newResource.description,
+          newResource.url,
+          newResource.tags,
+          newResource.order_index,
+          newResource.is_active ? 1 : 0
+        ]
+      );
+      newResource.id = result.insertId;
+    } catch (err) {
+      console.error('DB create resource error:', err.message);
+    }
+  }
+
+  // Update in-memory & persistent disk store
+  mockResearchSupport.push(newResource);
+  savePersistentDataStore();
+
+  res.status(201).json({
+    success: true,
+    message: 'Research resource created successfully!',
+    resource: newResource
+  });
+});
+
+// Admin: Update existing Research Support Resource
+app.put('/api/admin/research-support/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  const resourceId = parseInt(req.params.id, 10);
+  const {
+    category,
+    category_title,
+    title,
+    type,
+    source,
+    description,
+    url,
+    tags,
+    order_index,
+    is_active
+  } = req.body;
+
+  let existing = mockResearchSupport.find(r => r.id === resourceId);
+
+  if (isDbConnected) {
+    try {
+      const [rows] = await db.query('SELECT * FROM research_support_resources WHERE id = ?', [resourceId]);
+      if (rows.length > 0) existing = rows[0];
+    } catch (err) {
+      console.error('DB find resource error:', err.message);
+    }
+  }
+
+  if (!existing) {
+    return res.status(404).json({ message: 'Research resource not found' });
+  }
+
+  const updatedCategory = category !== undefined ? category : existing.category;
+  const resolvedCatTitle = category_title !== undefined ? category_title : 
+    (defaultCategories.find(c => c.id === updatedCategory)?.title || existing.category_title || updatedCategory);
+
+  const updatedResource = {
+    ...existing,
+    category: updatedCategory,
+    category_title: resolvedCatTitle,
+    title: title !== undefined ? title.trim() : existing.title,
+    type: type !== undefined ? type : existing.type,
+    source: source !== undefined ? source.trim() : existing.source,
+    description: description !== undefined ? description.trim() : existing.description,
+    url: url !== undefined ? url.trim() : existing.url,
+    tags: tags !== undefined ? tags.trim() : existing.tags,
+    order_index: order_index !== undefined ? Number(order_index) : (existing.order_index || 0),
+    is_active: is_active !== undefined ? Boolean(is_active) : (existing.is_active !== false)
+  };
+
+  if (isDbConnected) {
+    try {
+      await db.query(
+        `UPDATE research_support_resources SET 
+          category = ?, category_title = ?, title = ?, type = ?, source = ?, 
+          description = ?, url = ?, tags = ?, order_index = ?, is_active = ?
+        WHERE id = ?`,
+        [
+          updatedResource.category,
+          updatedResource.category_title,
+          updatedResource.title,
+          updatedResource.type,
+          updatedResource.source,
+          updatedResource.description,
+          updatedResource.url,
+          updatedResource.tags,
+          updatedResource.order_index,
+          updatedResource.is_active ? 1 : 0,
+          resourceId
+        ]
+      );
+    } catch (err) {
+      console.error('DB update resource error:', err.message);
+    }
+  }
+
+  // Update in-memory & persistent disk store
+  const memIdx = mockResearchSupport.findIndex(r => r.id === resourceId);
+  if (memIdx !== -1) {
+    mockResearchSupport[memIdx] = updatedResource;
+  } else {
+    mockResearchSupport.push(updatedResource);
+  }
+  savePersistentDataStore();
+
+  res.json({
+    success: true,
+    message: 'Research resource updated successfully!',
+    resource: updatedResource
+  });
+});
+
+// Admin: Delete Research Support Resource
+app.delete('/api/admin/research-support/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  const resourceId = parseInt(req.params.id, 10);
+
+  if (isDbConnected) {
+    try {
+      await db.query('DELETE FROM research_support_resources WHERE id = ?', [resourceId]);
+    } catch (err) {
+      console.error('DB delete resource error:', err.message);
+    }
+  }
+
+  mockResearchSupport = mockResearchSupport.filter(r => r.id !== resourceId);
+  savePersistentDataStore();
+
+  res.json({
+    success: true,
+    message: 'Research resource deleted successfully!'
+  });
+});
+
+// Admin: Reset to Default UMT KRSS / Leads Academic Library
+app.post('/api/admin/research-support/reset-default', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  if (isDbConnected) {
+    try {
+      await db.query('DELETE FROM research_support_resources');
+      for (const item of defaultResearchSupportResources) {
+        await db.query(
+          `INSERT INTO research_support_resources (id, category, category_title, title, type, source, description, url, tags, order_index, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [item.id, item.category, item.category_title, item.title, item.type, item.source, item.description, item.url, item.tags, item.order_index, item.is_active ? 1 : 0]
+        );
+      }
+    } catch (err) {
+      console.error('DB reset default resources error:', err.message);
+    }
+  }
+
+  mockResearchSupport = JSON.parse(JSON.stringify(defaultResearchSupportResources));
+  savePersistentDataStore();
+
+  res.json({
+    success: true,
+    message: 'Knowledge & Research Support Library reset to standard 31 academic resources!',
+    total: mockResearchSupport.length,
+    resources: mockResearchSupport
+  });
+});
+
+// Admin: Upload Resource PDF or Slide Document to Cloud / Local Storage
+app.post('/api/admin/research-support/upload', authenticateToken, upload.single('file'), async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied: Admin authorization required' });
+  }
+
+  try {
+    let fileUrl = '';
+    const { file_base64, file_name, mime_type } = req.body || {};
+
+    if (req.file) {
+      const base64Data = req.file.buffer.toString('base64');
+      const dataUri = `data:${req.file.mimetype};base64,${base64Data}`;
+      fileUrl = await resolveDriveUrl(dataUri, 'Research_Support_Docs', req.file.originalname.replace(/\.[^/.]+$/, ''));
+    } else if (file_base64) {
+      fileUrl = await resolveDriveUrl(file_base64, 'Research_Support_Docs', (file_name || 'research_doc').replace(/\.[^/.]+$/, ''));
+    } else {
+      return res.status(400).json({ message: 'No document file provided for upload' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Document uploaded successfully!',
+      url: fileUrl
+    });
+  } catch (err) {
+    console.error('Upload document error:', err.message);
+    res.status(500).json({ message: 'Failed to upload document', error: err.message });
   }
 });
 

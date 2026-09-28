@@ -47,13 +47,15 @@ import {
   Settings,
   HardDrive,
   Save,
-  Video
+  Video,
+  Compass
 } from 'lucide-react';
 import { TierBadge } from '../components/TierBadge';
 import { ProofViewerModal } from '../components/ProofViewerModal';
 import { ManuscriptModal } from '../components/ManuscriptModal';
 import { OfficialChallanModal } from '../components/OfficialChallanModal';
 import { GeminiNotebookModal } from '../components/GeminiNotebookModal';
+import { defaultResearchSupportResources } from '../data/researchSupportDefaultData';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -81,6 +83,7 @@ export const AdminDashboard = ({
     if (location.pathname.includes('/investors')) return 'investors';
     if (location.pathname.includes('/inquiries')) return 'inquiries';
     if (location.pathname.includes('/notifications')) return 'notifications';
+    if (location.pathname.includes('/research-support')) return 'research_support';
     if (location.pathname.includes('/settings')) return 'settings';
     if (location.pathname.includes('/users')) return 'users';
     return 'articles';
@@ -102,9 +105,197 @@ export const AdminDashboard = ({
     else if (tab === 'readers') navigate('/admin/readers');
     else if (tab === 'investors') navigate('/admin/investors');
     else if (tab === 'inquiries') navigate('/admin/inquiries');
+    else if (tab === 'research_support') navigate('/admin/research-support');
     else if (tab === 'notifications') navigate('/admin/notifications');
     else if (tab === 'settings') navigate('/admin/settings');
     else if (tab === 'users') navigate('/admin/users');
+  };
+
+  // Research Support (KRSS) State & Handlers
+  const [supportResources, setSupportResources] = useState(defaultResearchSupportResources);
+  const [loadingSupport, setLoadingSupport] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [editingSupportResource, setEditingSupportResource] = useState(null);
+  const [supportFormData, setSupportFormData] = useState({
+    category: 'proposal_writing',
+    category_title: 'Writing Effective Research Proposal',
+    title: '',
+    type: 'pdf',
+    source: '',
+    description: '',
+    url: '',
+    tags: '',
+    order_index: 0,
+    is_active: true
+  });
+  const [supportActionMsg, setSupportActionMsg] = useState('');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [supportCategoryFilter, setSupportCategoryFilter] = useState('all');
+  const [supportTypeFilter, setSupportTypeFilter] = useState('all');
+  const [uploadingSupportFile, setUploadingSupportFile] = useState(false);
+
+  const fetchAdminSupportResources = async () => {
+    try {
+      setLoadingSupport(true);
+      const token = localStorage.getItem('univ_token');
+      const res = await axios.get(`${API_BASE}/admin/research-support`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data && res.data.resources) {
+        setSupportResources(res.data.resources);
+      }
+    } catch (err) {
+      console.error('Error fetching admin research support:', err);
+    } finally {
+      setLoadingSupport(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminSupportResources();
+  }, []);
+
+  const handleOpenCreateSupport = () => {
+    setEditingSupportResource(null);
+    setSupportFormData({
+      category: 'proposal_writing',
+      category_title: 'Writing Effective Research Proposal',
+      title: '',
+      type: 'pdf',
+      source: '',
+      description: '',
+      url: '',
+      tags: '',
+      order_index: supportResources.length + 1,
+      is_active: true
+    });
+    setShowSupportModal(true);
+  };
+
+  const handleOpenEditSupport = (res) => {
+    setEditingSupportResource(res);
+    setSupportFormData({
+      category: res.category || 'proposal_writing',
+      category_title: res.category_title || '',
+      title: res.title || '',
+      type: res.type || 'pdf',
+      source: res.source || '',
+      description: res.description || '',
+      url: res.url || '',
+      tags: res.tags || '',
+      order_index: res.order_index !== undefined ? res.order_index : 0,
+      is_active: res.is_active !== false
+    });
+    setShowSupportModal(true);
+  };
+
+  const handleSaveSupport = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('univ_token');
+    try {
+      setLoadingSupport(true);
+      if (editingSupportResource) {
+        await axios.put(`${API_BASE}/admin/research-support/${editingSupportResource.id}`, supportFormData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSupportActionMsg('✅ Research support resource updated successfully!');
+      } else {
+        await axios.post(`${API_BASE}/admin/research-support`, supportFormData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSupportActionMsg('✅ New research support resource created successfully!');
+      }
+      setShowSupportModal(false);
+      await fetchAdminSupportResources();
+      setTimeout(() => setSupportActionMsg(''), 4000);
+    } catch (err) {
+      console.error('Error saving research support resource:', err);
+      alert(err.response?.data?.message || 'Could not save resource');
+    } finally {
+      setLoadingSupport(false);
+    }
+  };
+
+  const handleToggleSupportActive = async (res) => {
+    const token = localStorage.getItem('univ_token');
+    try {
+      await axios.put(`${API_BASE}/admin/research-support/${res.id}`, {
+        is_active: !res.is_active
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchAdminSupportResources();
+    } catch (err) {
+      console.error('Toggle active error:', err);
+    }
+  };
+
+  const handleDeleteSupport = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    const token = localStorage.getItem('univ_token');
+    try {
+      await axios.delete(`${API_BASE}/admin/research-support/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSupportActionMsg('🗑️ Resource removed successfully!');
+      await fetchAdminSupportResources();
+      setTimeout(() => setSupportActionMsg(''), 3000);
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
+  };
+
+  const handleResetDefaultSupport = async () => {
+    if (!window.confirm('Restore all standard 31 academic resources from UMT KRSS library? Any custom additions will be reset to default.')) return;
+    const token = localStorage.getItem('univ_token');
+    try {
+      setLoadingSupport(true);
+      await axios.post(`${API_BASE}/admin/research-support/reset-default`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSupportActionMsg('✨ Knowledge & Research Support library restored to standard 31 resources!');
+      await fetchAdminSupportResources();
+      setTimeout(() => setSupportActionMsg(''), 4000);
+    } catch (err) {
+      console.error('Reset error:', err);
+    } finally {
+      setLoadingSupport(false);
+    }
+  };
+
+  const handleSupportFileUpload = async (file) => {
+    if (!file) return;
+    const token = localStorage.getItem('univ_token');
+    try {
+      setUploadingSupportFile(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result;
+          const res = await axios.post(`${API_BASE}/admin/research-support/upload`, {
+            file_base64: base64,
+            file_name: file.name,
+            mime_type: file.type
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.data && res.data.url) {
+            setSupportFormData(prev => ({ ...prev, url: res.data.url }));
+            setSupportActionMsg('📁 Document uploaded & URL attached successfully!');
+            setTimeout(() => setSupportActionMsg(''), 3000);
+          }
+        } catch (uploadErr) {
+          console.error('Upload error:', uploadErr);
+          alert('Failed to upload document file');
+        } finally {
+          setUploadingSupportFile(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('File read error:', err);
+      setUploadingSupportFile(false);
+    }
   };
 
   // Journals Management State
@@ -939,6 +1130,18 @@ export const AdminDashboard = ({
                 {inquiriesList.filter(i => i.status === 'Pending').length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => switchTab('research_support')}
+            className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${
+              activeSubTab === 'research_support'
+                ? 'bg-[#0A192F] text-amber-400 shadow-sm font-black'
+                : 'text-slate-700 hover:bg-white'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Research Support ({supportResources.length || 31})</span>
           </button>
 
           <button
@@ -2387,6 +2590,483 @@ export const AdminDashboard = ({
                 })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: KNOWLEDGE & RESEARCH SUPPORT SERVICES (KRSS) MANAGER                  */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'research_support' && (
+        <div className="space-y-6 animate-fade-in text-slate-900">
+          {/* Header Panel */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#0F2C59] text-amber-400 flex items-center justify-center font-black flex-shrink-0 shadow-sm">
+                <Compass className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Academic Repository</span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                    {supportResources.length} Total Resources
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-[#0A192F]">Knowledge & Research Support Hub</h2>
+                <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
+                  Manage academic proposal guides, slide decks, AI journal finders (Elsevier/Springer/EndNote), and citation ranking metrics (Clarivate/Scopus/SNIP). Fully dynamic: edit any line, title, description, or URL anytime.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleResetDefaultSupport}
+                disabled={loadingSupport}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-2 transition shadow-sm"
+                title="Restore all standard 31 resources from UMT KRSS library"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${loadingSupport ? 'animate-spin' : ''}`} />
+                <span>Restore Default Library</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCreateSupport}
+                className="px-5 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-black text-xs flex items-center gap-2 transition shadow-md"
+              >
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>Add New Resource</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.open('/research-support', '_blank')}
+                className="p-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold transition flex items-center gap-1.5"
+                title="View Public Support Page"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="hidden sm:inline">Live Page</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Action Message Banner */}
+          {supportActionMsg && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold animate-fade-in flex items-center justify-between">
+              <span>{supportActionMsg}</span>
+              <button onClick={() => setSupportActionMsg('')} className="text-emerald-700 hover:text-emerald-900 font-black">✕</button>
+            </div>
+          )}
+
+          {/* Stats Ribbon */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold text-sm">
+                📝
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#0A192F]">
+                  {supportResources.filter(r => r.category === 'proposal_writing').length}
+                </div>
+                <div className="text-[11px] font-semibold text-slate-500">Proposal Guides</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-sm">
+                🎯
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#0A192F]">
+                  {supportResources.filter(r => r.category === 'topic_selection').length}
+                </div>
+                <div className="text-[11px] font-semibold text-slate-500">Topic Frameworks</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold text-sm">
+                🔍
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#0A192F]">
+                  {supportResources.filter(r => r.category === 'journal_finder').length}
+                </div>
+                <div className="text-[11px] font-semibold text-slate-500">AI Matchers</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-800 flex items-center justify-center font-bold text-sm">
+                📊
+              </div>
+              <div>
+                <div className="text-lg font-black text-[#0A192F]">
+                  {supportResources.filter(r => r.category === 'ranking_systems').length}
+                </div>
+                <div className="text-[11px] font-semibold text-slate-500">Ranking Systems</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search and Category Filters */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="relative w-full md:w-96">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={supportSearch}
+                onChange={(e) => setSupportSearch(e.target.value)}
+                placeholder="Search resources by title, description, source..."
+                className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none transition font-medium"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto text-xs">
+              <select
+                value={supportCategoryFilter}
+                onChange={(e) => setSupportCategoryFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+              >
+                <option value="all">All Categories ({supportResources.length})</option>
+                <option value="proposal_writing">Proposal Writing</option>
+                <option value="topic_selection">Topic Selection</option>
+                <option value="journal_finder">Journal Finders</option>
+                <option value="ranking_systems">Rankings & Metrics</option>
+              </select>
+
+              <select
+                value={supportTypeFilter}
+                onChange={(e) => setSupportTypeFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+              >
+                <option value="all">All Types</option>
+                <option value="pdf">📄 PDF Guides</option>
+                <option value="slides">📊 Slide Decks</option>
+                <option value="tool">🤖 AI Tools & Portals</option>
+                <option value="metric">📈 Metrics & Rankings</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Resources Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                  <tr>
+                    <th className="py-3.5 px-4 w-12 text-center">#</th>
+                    <th className="py-3.5 px-4">Resource & Source</th>
+                    <th className="py-3.5 px-4">Category & Discipline</th>
+                    <th className="py-3.5 px-4">Type</th>
+                    <th className="py-3.5 px-4">Destination Link</th>
+                    <th className="py-3.5 px-4 text-center">Status</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {supportResources
+                    .filter((r) => {
+                      if (supportCategoryFilter !== 'all' && r.category !== supportCategoryFilter) return false;
+                      if (supportTypeFilter !== 'all' && r.type !== supportTypeFilter) return false;
+                      if (!supportSearch.trim()) return true;
+                      const q = supportSearch.toLowerCase();
+                      return (
+                        r.title?.toLowerCase().includes(q) ||
+                        r.description?.toLowerCase().includes(q) ||
+                        r.source?.toLowerCase().includes(q) ||
+                        r.tags?.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400">
+                          {item.order_index || idx + 1}
+                        </td>
+                        <td className="py-3.5 px-4 max-w-sm">
+                          <div className="font-bold text-slate-900 line-clamp-1">{item.title}</div>
+                          {item.source && (
+                            <div className="text-[11px] text-slate-500 font-medium">{item.source}</div>
+                          )}
+                          <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{item.description}</div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="font-bold text-[#0F2C59] block">
+                            {item.category_title || item.category?.replace(/_/g, ' ')}
+                          </span>
+                          {item.tags && (
+                            <span className="text-[10px] text-slate-400 line-clamp-1">
+                              {item.tags}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                            item.type === 'pdf' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                            item.type === 'slides' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                            item.type === 'tool' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            item.type === 'metric' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}>
+                            {item.type}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 max-w-xs">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 font-mono text-[11px] truncate flex items-center gap-1 hover:underline max-w-[200px]"
+                            title={item.url}
+                          >
+                            <span className="truncate">{item.url}</span>
+                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          </a>
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSupportActive(item)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition cursor-pointer ${
+                              item.is_active !== false
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            }`}
+                          >
+                            {item.is_active !== false ? '● Active' : '○ Disabled'}
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditSupport(item)}
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition"
+                              title="Edit Resource"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSupport(item.id, item.title)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition"
+                              title="Delete Resource"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT RESEARCH SUPPORT MODAL */}
+      {showSupportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fade-in text-slate-900">
+          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto relative">
+            <button
+              onClick={() => setShowSupportModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-2 rounded-full bg-slate-100 transition"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b border-slate-100 pb-3">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 text-[11px] font-bold mb-1">
+                <Compass className="w-3.5 h-3.5 text-amber-600" />
+                <span>Research Support Repository</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A192F]">
+                {editingSupportResource ? 'Edit Academic Support Resource' : 'Add New Academic Support Resource'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                Modify title, description, URL, slides/PDF link, or category. Changes sync permanently to database and cloud storage.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSupport} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-700 block mb-1 font-bold">Resource Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={supportFormData.title}
+                  onChange={(e) => setSupportFormData({ ...supportFormData, title: e.target.value })}
+                  placeholder="e.g. Elsevier Journal Finder or Elements of Research Proposal"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Category Area *</label>
+                  <select
+                    value={supportFormData.category}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      let catTitle = supportFormData.category_title;
+                      if (cat === 'proposal_writing') catTitle = 'Writing Effective Research Proposal';
+                      else if (cat === 'topic_selection') catTitle = 'Finalizing Research Topic';
+                      else if (cat === 'journal_finder') catTitle = 'Finding Suitable Journal for Publishing Your Research';
+                      else if (cat === 'ranking_systems') catTitle = 'Journals Ranking System & Impact Metrics';
+                      setSupportFormData({ ...supportFormData, category: cat, category_title: catTitle });
+                    }}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+                  >
+                    <option value="proposal_writing">📝 Proposal Writing</option>
+                    <option value="topic_selection">🎯 Topic Selection</option>
+                    <option value="journal_finder">🔍 Journal Finder AI Tools</option>
+                    <option value="ranking_systems">📊 Journals Ranking & Metrics</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Resource Type *</label>
+                  <select
+                    value={supportFormData.type}
+                    onChange={(e) => setSupportFormData({ ...supportFormData, type: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+                  >
+                    <option value="pdf">📄 PDF Document / Handbook</option>
+                    <option value="slides">📊 Slide Deck (SlideShare / PPT)</option>
+                    <option value="tool">🤖 Interactive AI Matcher / Tool</option>
+                    <option value="metric">📈 Citation Ranking System / Index</option>
+                    <option value="link">🔗 External Academic Link</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Author / Source / Publisher</label>
+                  <input
+                    type="text"
+                    value={supportFormData.source}
+                    onChange={(e) => setSupportFormData({ ...supportFormData, source: e.target.value })}
+                    placeholder="e.g. Elsevier, Babson College, Clarivate, UQ"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Display Order Index</label>
+                  <input
+                    type="number"
+                    value={supportFormData.order_index}
+                    onChange={(e) => setSupportFormData({ ...supportFormData, order_index: Number(e.target.value) })}
+                    placeholder="1, 2, 3..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 block mb-1 font-bold">Detailed Summary & Purpose *</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={supportFormData.description}
+                  onChange={(e) => setSupportFormData({ ...supportFormData, description: e.target.value })}
+                  placeholder="Explain how this slide deck, guide, or matching tool benefits student researchers and faculty..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 leading-relaxed font-sans focus:ring-2 focus:ring-amber-400 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 block mb-1 font-bold">Resource URL / Destination Link *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    required
+                    value={supportFormData.url}
+                    onChange={(e) => setSupportFormData({ ...supportFormData, url: e.target.value })}
+                    placeholder="https://journalfinder.elsevier.com/ or PDF/Slide link"
+                    className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 font-semibold focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
+                  {supportFormData.url && (
+                    <a
+                      href={supportFormData.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Test</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Optional File Upload Box */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                <label className="text-slate-700 block font-bold text-[11px]">
+                  Or Upload Document (PDF / Presentation) Directly to Cloud / Local Storage:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.ppt,.pptx,.doc,.docx"
+                    onChange={(e) => handleSupportFileUpload(e.target.files?.[0])}
+                    disabled={uploadingSupportFile}
+                    className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#0A192F] file:text-amber-400 hover:file:bg-[#0F2C59]"
+                  />
+                </div>
+                {uploadingSupportFile && (
+                  <p className="text-[11px] text-blue-600 font-bold animate-pulse">Uploading file to storage and generating link...</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-slate-700 block mb-1 font-bold">Tags / Keywords (Comma-separated)</label>
+                <input
+                  type="text"
+                  value={supportFormData.tags}
+                  onChange={(e) => setSupportFormData({ ...supportFormData, tags: e.target.value })}
+                  placeholder="e.g. Scopus, AI Matcher, Proposal Guide, Annotated"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-medium"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="support_active"
+                  checked={supportFormData.is_active}
+                  onChange={(e) => setSupportFormData({ ...supportFormData, is_active: e.target.checked })}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                />
+                <label htmlFor="support_active" className="text-slate-800 font-bold text-xs cursor-pointer">
+                  Publicly Active (Visible on Live Research Support Portal)
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSupportModal(false)}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingSupport || uploadingSupportFile}
+                  className="px-6 py-2.5 bg-[#0A192F] hover:bg-[#0F2C59] text-amber-400 font-black rounded-xl text-xs transition shadow-md flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingSupportResource ? 'Update Resource' : 'Create Resource'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

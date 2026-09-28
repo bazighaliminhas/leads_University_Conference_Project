@@ -59,11 +59,11 @@ export function ResearchHome() {
     },
     {
       id: 'knowledge-support',
-      title: 'Research Grants & Ethics',
-      description: 'Dedicated institutional ethics review boards (IRB), grant writing guidance, and HEC compliance support for faculty and student authors.',
+      title: 'Knowledge & Research Support',
+      description: 'Slide decks, annotated sample proposals, Elsevier/Springer AI journal finders, and Clarivate/Scopus citation ranking systems.',
       image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80',
-      link: '/journals',
-      badge: 'Academic Support',
+      link: '/research-support',
+      badge: '31+ Academic Resources',
       icon: Compass
     },
     {
@@ -103,7 +103,7 @@ export function ResearchHome() {
   ];
 
   return (
-    <div className="space-y-10 font-sans pb-16">
+    <div className="space-y-12 font-sans pb-16">
       {/* Top Banner Header */}
       <div className="border-b border-slate-200 bg-white pb-8 pt-2">
         <div className="flex items-center gap-2 text-xs font-bold text-[#0F2C59] uppercase tracking-wider mb-3">
@@ -124,18 +124,18 @@ export function ResearchHome() {
 
           <div className="flex flex-wrap gap-3 self-start lg:self-auto">
             <button
+              onClick={() => navigate('/research-support')}
+              className="px-5 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center gap-2"
+            >
+              <Compass className="w-4 h-4 text-amber-200" />
+              <span>Research Support (KRSS)</span>
+            </button>
+            <button
               onClick={() => navigate('/journals')}
               className="px-5 py-3 rounded-xl bg-[#0F2C59] hover:bg-[#0A192F] text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center gap-2"
             >
               <BookOpen className="w-4 h-4 text-amber-400" />
               <span>Explore Journals</span>
-            </button>
-            <button
-              onClick={() => navigate('/conferences')}
-              className="px-5 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center gap-2"
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Conferences 2026</span>
             </button>
           </div>
         </div>
@@ -224,6 +224,109 @@ export function ResearchHome() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* DEDICATED KNOWLEDGE & RESEARCH SUPPORT SERVICES (KRSS) SHOWCASE */}
+      <div className="bg-gradient-to-br from-slate-900 via-[#0F2C59] to-[#0A192F] rounded-3xl p-8 sm:p-12 text-white shadow-2xl relative overflow-hidden border border-blue-900/40">
+        <div className="absolute -right-10 -top-10 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-3 max-w-3xl">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Knowledge & Research Support Services (KRSS)</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white">
+                Academic Research Support & Journal Matcher Hub
+              </h2>
+              <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                Empowering scholars at Lahore Leads University with comprehensive proposal writing slide decks, doctoral topic selection frameworks, AI manuscript matchers, and international journal ranking indicators.
+              </p>
+            </div>
+
+            <button
+              onClick={() => navigate('/research-support')}
+              className="px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition flex items-center gap-2 self-start md:self-auto flex-shrink-0"
+            >
+              <span>Explore All 31+ Resources</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div 
+              onClick={() => navigate('/research-support')}
+              className="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3 transition cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold">
+                📝
+              </div>
+              <h4 className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">
+                Proposal Writing
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                12 slide decks, quantitative research templates, and annotated proposals with evaluator commentary from UQ, Babson & UMass.
+              </p>
+              <div className="pt-2 text-xs font-bold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                <span>View Slide Decks & PDFs →</span>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => navigate('/research-support')}
+              className="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3 transition cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold">
+                🎯
+              </div>
+              <h4 className="font-bold text-white text-base group-hover:text-blue-300 transition-colors">
+                Topic Selection
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                7 step-by-step methodologies from Iowa State & BYU to identify viable research gaps, validate novelty, and avoid saturated domains.
+              </p>
+              <div className="pt-2 text-xs font-bold text-blue-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                <span>Explore Frameworks →</span>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => navigate('/research-support')}
+              className="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3 transition cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold">
+                🔍
+              </div>
+              <h4 className="font-bold text-white text-base group-hover:text-emerald-300 transition-colors">
+                AI Journal Matchers
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                Match manuscript abstracts against indexed databases using Elsevier Journal Finder, Springer Suggester, Clarivate EndNote, and JANE.
+              </p>
+              <div className="pt-2 text-xs font-bold text-emerald-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                <span>Launch Matchers →</span>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => navigate('/research-support')}
+              className="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3 transition cursor-pointer group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold">
+                📊
+              </div>
+              <h4 className="font-bold text-white text-base group-hover:text-purple-300 transition-colors">
+                Rankings & Metrics
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                Direct access to Clarivate Web of Science (JCR), SCImago SJR Quartiles (Q1-Q4), CWTS Leiden SNIP, and Eigenfactor EFT scores.
+              </p>
+              <div className="pt-2 text-xs font-bold text-purple-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                <span>Check Indexing →</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -2,13 +2,13 @@
 LAHORE LEADS UNIVERSITY - ORIC RESEARCH REPOSITORY
 OFFICIAL STUDENT MANUSCRIPT & SUBMISSION RECORD
 ===================================================================
-Submission ID:     LLU-ART-1790230731537
+Submission ID:     LLU-ART-1790576306776
 Student Name:      Bazigh Minhas
 Student Email:     bazighminhas1@gmail.com
 Contact Mobile:    +923482727605
 Paper Title:       Next-Gen Autonomous Robotics & AI Systems
 Discipline/Field:  Artificial Intelligence & Robotics
-Submission Date:   9/24/2026, 11:18:51 AM
+Submission Date:   9/28/2026, 11:18:26 AM
 Plagiarism Status: Clean (0% Plagiarism Verified)
 Transaction ID:    TID-LLU-2026-9482
 Bank Channel:      HBL Mobile Banking

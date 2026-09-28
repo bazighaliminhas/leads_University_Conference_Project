@@ -1,5 +1,5 @@
 {
-  "saved_at": "2026-09-25T06:59:18.686Z",
+  "saved_at": "2026-09-25T10:21:42.795Z",
   "mockArticles": [
     {
       "id": 1790244888464,
@@ -494,28 +494,6 @@
       "created_at": "2026-09-25T06:59:18.686Z"
     },
     {
-      "id": 1790246129858,
-      "user_id": 10,
-      "role_target": null,
-      "type": "article_review",
-      "title": "Article review updated",
-      "message": "Your article “RESEARCH PAPER ON ARTIFICIAL INTELLIGENCE & ITS APPLICATIONS” status is now: Approved - Awaiting Publication Fee.",
-      "link": "/student/paper/1790244888464",
-      "is_read": false,
-      "created_at": "2026-09-24T10:35:28.880Z"
-    },
-    {
-      "id": 1790245808813,
-      "user_id": 10,
-      "role_target": null,
-      "type": "resubmission",
-      "title": "✅ Resubmission Received",
-      "message": "Your revised draft for \"RESEARCH PAPER ON ARTIFICIAL INTELLIGENCE & ITS APPLICATIONS\" is under re-evaluation.",
-      "link": "/student",
-      "is_read": false,
-      "created_at": "2026-09-24T10:30:08.166Z"
-    },
-    {
       "id": 1790245808193,
       "user_id": null,
       "role_target": "admin",
@@ -525,28 +503,6 @@
       "link": "/admin/articles",
       "is_read": false,
       "created_at": "2026-09-24T10:30:08.162Z"
-    },
-    {
-      "id": 1790245781230,
-      "user_id": 10,
-      "role_target": null,
-      "type": "article_review",
-      "title": "Article review updated",
-      "message": "Your article “RESEARCH PAPER ON ARTIFICIAL INTELLIGENCE & ITS APPLICATIONS” status is now: Needs Revision.",
-      "link": "/student/paper/1790244888464",
-      "is_read": false,
-      "created_at": "2026-09-24T10:29:40.628Z"
-    },
-    {
-      "id": 1790244888536,
-      "user_id": 10,
-      "role_target": null,
-      "type": "article_submitted",
-      "title": "Submission received",
-      "message": "Your article “RESEARCH PAPER ON ARTIFICIAL INTELLIGENCE & ITS APPLICATIONS” was submitted successfully and is awaiting admin review.",
-      "link": "/student/paper/1790244888464",
-      "is_read": false,
-      "created_at": "2026-09-24T10:14:48.487Z"
     },
     {
       "id": 1790244889315,
@@ -580,39 +536,6 @@
       "link": "/student",
       "is_read": false,
       "created_at": "2026-09-24T08:29:04.812Z"
-    },
-    {
-      "id": 1790237067646,
-      "user_id": null,
-      "role_target": "student",
-      "type": "conference",
-      "title": "🎤 Conference Scheduled: Artificial INtelligent ",
-      "message": "Event date: 2026-09-28 (10:00 AM - 04:00 PM) at University Main Auditorium & Global HD Live Stream.",
-      "link": "/conferences",
-      "is_read": false,
-      "created_at": "2026-09-24T08:04:27.165Z"
-    },
-    {
-      "id": 1790236856498,
-      "user_id": null,
-      "role_target": "student",
-      "type": "conference",
-      "title": "🎤 Conference Scheduled: Artificial INtelligent ",
-      "message": "Event date: 2026-09-28 (10:00 AM - 04:00 PM) at University Main Auditorium & Global HD Live Stream.",
-      "link": "/conferences",
-      "is_read": false,
-      "created_at": "2026-09-24T08:00:55.918Z"
-    },
-    {
-      "id": 1790236734177,
-      "user_id": null,
-      "role_target": "student",
-      "type": "conference",
-      "title": "🎤 Conference Scheduled: Artificial INtelligent ",
-      "message": "Event date: 2026-09-28 (10:00 AM - 04:00 PM) at University Main Auditorium & Global HD Live Stream.",
-      "link": "/conferences",
-      "is_read": false,
-      "created_at": "2026-09-24T07:58:53.586Z"
     },
     {
       "id": 1790236544844,
